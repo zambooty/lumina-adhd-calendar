@@ -73,7 +73,7 @@ export function CaptureImport({ onImported }: Props) {
       return 'Whisper unbound — paste a transcript (audio upload needs a key).'
     }
     if (tab === 'voicemail' && providers.whisperConfigured) {
-      return 'Speech-to-text ready — upload audio or paste a transcript.'
+      return 'Speech-to-text ready after Connect Google — or paste a transcript.'
     }
     if (tab === 'imap' && !providers.imapLiveConfigured) {
       return 'IMAP live fetch unbound — paste email or save prefs for later.'
