@@ -171,7 +171,7 @@ Hardening on exchange/refresh:
 
 Scopes: `calendar.readonly` + `gmail.readonly`.
 
-**Token storage tradeoff:** access + refresh live in memory + `sessionStorage` for the tab. `localStorage` keeps only a **refresh-token bridge** (no durable access token) for ≤24h so mobile Safari OAuth redirects that wipe session can still reconnect. After that window, or on **Disconnect / Reset**, refresh is cleared and the user must Connect Google again.
+**Token storage tradeoff:** access + refresh live in memory + `sessionStorage` for the tab / Cap WebView (never logged). On **Capacitor native**, tokens stay out of `localStorage` entirely (Custom Tabs return keeps session). On **web**, `localStorage` keeps only a **refresh-token bridge** (no durable access token) for ≤24h so mobile Safari OAuth redirects that wipe session can still reconnect. After that window, or on **Disconnect / Reset**, refresh is cleared and the user must Connect Google again.
 
 Mobile notes: GIS popups often blank the page on iOS/Android browsers, so Connect Google uses a redirect + `/api/google/exchange` path on coarse/narrow viewports. Pull shows honest empty/error status instead of silent demo fallback when live.
 
@@ -218,12 +218,26 @@ npm run build
 npx cap sync android
 ```
 
+`android/gradle/wrapper/gradle-wrapper.jar` is **gitignored** so it stays out of the Cursor web publish package (Android build tool only — not needed at web runtime). Properties still pin Gradle `8.14.3`. Restore the jar before `./gradlew`:
+
+```bash
+npm run android:ensure-wrapper
+# or: node scripts/ensure-gradle-wrapper.mjs
+```
+
 Then open `android/` in Android Studio on a machine with the SDK and **Run**, or:
 
 ```bash
+npm run android:debug
+# or after ensure-wrapper:
 cd android && ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+### Android backup / FileProvider
+
+- `allowBackup=false` plus exclude-all `backup_rules` / `data_extraction_rules` so WebView/prefs are not casually cloud-backed up or device-transferred.
+- FileProvider paths are limited to app `cache/` + `files/` (no external storage root).
 
 ## What’s in the app
 

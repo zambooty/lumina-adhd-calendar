@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider paths — keep narrow. Do not expose external storage root
+  (Capacitor default external-path "." was overly broad).
+  Cap plugins that share files use cache/ or files/ under the app sandbox.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <cache-path name="cache" path="." />
+    <files-path name="files" path="." />
 </paths>

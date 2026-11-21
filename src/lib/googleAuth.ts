@@ -14,10 +14,10 @@ const REDIRECT_URI_KEY = 'lumina_google_redirect_uri_v1'
 const AUTH_FLASH_KEY = 'lumina_google_auth_flash'
 
 /**
- * How long a refresh token may linger in localStorage after last write.
- * Prefer sessionStorage / in-memory for reconnect within a tab; localStorage
- * is only a short bridge for mobile Safari OAuth redirects that wipe session.
- * Tradeoff: after this window the user must Connect Google again.
+ * How long a refresh token may linger in localStorage after last write (web
+ * mobile Safari bridge only). Prefer memory + sessionStorage; Cap native never
+ * writes refresh/access to localStorage. Tradeoff: after this window the user
+ * must Connect Google again.
  */
 export const REFRESH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -32,6 +32,24 @@ type StoredToken = {
 
 /** In-memory mirror — dies with the page; preferred over durable storage. */
 let memoryToken: StoredToken | null = null
+
+/**
+ * Cap WebView keeps sessionStorage across Custom Tabs OAuth return, so a
+ * durable localStorage refresh bridge is unnecessary (and riskier on backup /
+ * rooted devices). Web mobile Safari still needs the short bridge.
+ */
+function allowLocalStorageRefreshBridge(): boolean {
+  return !isNativeCapacitor()
+}
+
+/** Drop any leftover localStorage token blob (Cap migrate / aged web bridge). */
+function clearLocalStorageTokenBridge(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
 
 type TokenClient = {
   requestAccessToken: (overrideConfig?: {
@@ -136,8 +154,17 @@ function readStored(): StoredToken | null {
     if (memoryToken) candidates.push(memoryToken)
     const session = parseTokenRaw(sessionStorage.getItem(TOKEN_KEY))
     if (session) candidates.push(session)
-    const local = parseTokenRaw(localStorage.getItem(TOKEN_KEY))
-    if (local) candidates.push(local)
+
+    const useLocalBridge = allowLocalStorageRefreshBridge()
+    const local = useLocalBridge
+      ? parseTokenRaw(localStorage.getItem(TOKEN_KEY))
+      : null
+    if (!useLocalBridge) {
+      // Cap (or migrate): never keep Google tokens in durable localStorage.
+      clearLocalStorageTokenBridge()
+    } else if (local) {
+      candidates.push(local)
+    }
 
     let best: StoredToken | null = null
     for (const parsed of candidates) {
@@ -149,7 +176,7 @@ function readStored(): StoredToken | null {
         Boolean(parsed.refreshToken) &&
         (parsed === memoryToken ||
           parsed === session ||
-          refreshStillValid(parsed))
+          (parsed === local && refreshStillValid(parsed)))
       if (!hasAccess && !hasRefresh) continue
       best = {
         accessToken: hasAccess ? parsed.accessToken : '',
@@ -162,13 +189,9 @@ function readStored(): StoredToken | null {
     }
 
     if (!best) {
-      // Drop aged localStorage refresh so it cannot linger indefinitely.
+      // Drop aged / unused localStorage refresh so it cannot linger.
       if (local && local.refreshToken && !refreshStillValid(local)) {
-        try {
-          localStorage.removeItem(TOKEN_KEY)
-        } catch {
-          /* ignore */
-        }
+        clearLocalStorageTokenBridge()
       }
       return null
     }
@@ -192,15 +215,20 @@ function writeStoredRaw(token: StoredToken): void {
   }
   memoryToken = withMeta
 
-  // Session: full token for tab lifetime (survives soft reloads).
+  // Session: full token for tab / Cap WebView lifetime (survives soft reloads).
+  // Never log this blob — it contains bearer material.
   try {
     sessionStorage.setItem(TOKEN_KEY, JSON.stringify(withMeta))
   } catch {
     /* private mode */
   }
 
-  // localStorage: refresh-only bridge (no durable access token). Cap retention
-  // via refreshStoredAt so a stolen blob ages out within REFRESH_TOKEN_MAX_AGE_MS.
+  // localStorage: web-only refresh bridge (never access token). Cap skips this.
+  // Cap retention via refreshStoredAt so a stolen blob ages out.
+  if (!allowLocalStorageRefreshBridge()) {
+    clearLocalStorageTokenBridge()
+    return
+  }
   try {
     if (withMeta.refreshToken) {
       const bridge: StoredToken = {
@@ -212,7 +240,7 @@ function writeStoredRaw(token: StoredToken): void {
       }
       localStorage.setItem(TOKEN_KEY, JSON.stringify(bridge))
     } else {
-      localStorage.removeItem(TOKEN_KEY)
+      clearLocalStorageTokenBridge()
     }
   } catch {
     /* quota / private mode */
@@ -246,11 +274,7 @@ export function clearGoogleToken(): void {
     }
   }
   memoryToken = null
-  try {
-    localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    /* ignore */
-  }
+  clearLocalStorageTokenBridge()
   try {
     sessionStorage.removeItem(TOKEN_KEY)
   } catch {
@@ -705,7 +729,7 @@ async function silentPopupToken(clientId: string, scopes: string): Promise<strin
 
 /**
  * Ensure a fresh access token exists.
- * Tries: valid localStorage token → refresh_token exchange → silent GIS → interactive.
+ * Tries: valid memory/session token → refresh_token exchange → silent GIS → interactive.
  */
 export async function ensureGoogleAccessToken(): Promise<string | null> {
   const existing = getGoogleAccessToken()
