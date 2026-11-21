@@ -1,31 +1,13 @@
+import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { readGoogleEnv } from '../../server/googleEnv.js'
-
-function isSameOrigin(request: Request): boolean {
-  const requestOrigin = new URL(request.url).origin
-  const origin = request.headers.get('origin')
-  if (origin) {
-    try {
-      return new URL(origin).origin === requestOrigin
-    } catch {
-      return false
-    }
-  }
-  // Some mobile browsers omit Origin on same-origin POSTs — fall back to Referer.
-  const referer = request.headers.get('referer')
-  if (!referer) return false
-  try {
-    return new URL(referer).origin === requestOrigin
-  } catch {
-    return false
-  }
-}
 
 /**
  * POST /api/google/exchange — optional auth-code → token exchange.
- * Same-origin only. Primary Connect Google flow uses GIS token client (no exchange).
+ * Allowlisted app origins only. Primary Connect Google flow uses GIS token
+ * client (no exchange); mobile redirect OAuth requires this route.
  */
 export async function POST(request: Request): Promise<Response> {
-  if (!isSameOrigin(request)) {
+  if (!isAllowedRequestOrigin(request)) {
     return Response.json(
       { error: 'forbidden_origin' },
       { status: 403, headers: { 'cache-control': 'private, no-store' } },

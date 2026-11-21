@@ -1,30 +1,13 @@
+import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { readGoogleEnv } from '../../server/googleEnv.js'
-
-function isSameOrigin(request: Request): boolean {
-  const requestOrigin = new URL(request.url).origin
-  const origin = request.headers.get('origin')
-  if (origin) {
-    try {
-      return new URL(origin).origin === requestOrigin
-    } catch {
-      return false
-    }
-  }
-  const referer = request.headers.get('referer')
-  if (!referer) return false
-  try {
-    return new URL(referer).origin === requestOrigin
-  } catch {
-    return false
-  }
-}
 
 /**
  * POST /api/google/refresh — refresh_token → access_token.
- * Same-origin only. Used after mobile code exchange stored a refresh token.
+ * Allowlisted app origins only. Used after mobile code exchange stored a
+ * refresh token.
  */
 export async function POST(request: Request): Promise<Response> {
-  if (!isSameOrigin(request)) {
+  if (!isAllowedRequestOrigin(request)) {
     return Response.json(
       { error: 'forbidden_origin' },
       { status: 403, headers: { 'cache-control': 'private, no-store' } },

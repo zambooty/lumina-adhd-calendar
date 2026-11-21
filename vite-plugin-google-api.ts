@@ -1,5 +1,28 @@
 import type { Plugin } from 'vite'
 import { GOOGLE_SCOPES, readGoogleEnv } from './server/googleEnv.js'
+import { isAllowedAppOrigin } from './server/originAllowlist.js'
+
+function nodeHeaders(
+  req: import('http').IncomingMessage,
+): Parameters<typeof isAllowedAppOrigin>[0] {
+  return {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    host: req.headers.host,
+    'x-forwarded-host': req.headers['x-forwarded-host'],
+    'x-forwarded-proto': req.headers['x-forwarded-proto'],
+    'sec-fetch-site': req.headers['sec-fetch-site'],
+  }
+}
+
+function requestUrlFor(req: import('http').IncomingMessage): string {
+  const host = req.headers.host || '127.0.0.1'
+  const proto =
+    (typeof req.headers['x-forwarded-proto'] === 'string'
+      ? req.headers['x-forwarded-proto'].split(',')[0]?.trim()
+      : null) || 'http'
+  return `${proto}://${host}${req.url ?? '/'}`
+}
 
 /**
  * Local Vite middleware mirroring Cursor host `/api/google/*` route handlers
@@ -46,19 +69,7 @@ function attachGoogleApi(
     }
 
     if (url === '/api/google/exchange' && req.method === 'POST') {
-      const origin = req.headers.origin
-      const referer = req.headers.referer
-      const host = req.headers.host
-      const originHost = (() => {
-        try {
-          if (origin) return new URL(origin).host
-          if (referer) return new URL(referer).host
-          return null
-        } catch {
-          return null
-        }
-      })()
-      if (!host || !originHost || originHost !== host) {
+      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
         res.statusCode = 403
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify({ error: 'forbidden_origin' }))
@@ -154,19 +165,7 @@ function attachGoogleApi(
     }
 
     if (url === '/api/google/refresh' && req.method === 'POST') {
-      const origin = req.headers.origin
-      const referer = req.headers.referer
-      const host = req.headers.host
-      const originHost = (() => {
-        try {
-          if (origin) return new URL(origin).host
-          if (referer) return new URL(referer).host
-          return null
-        } catch {
-          return null
-        }
-      })()
-      if (!host || !originHost || originHost !== host) {
+      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
         res.statusCode = 403
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify({ error: 'forbidden_origin' }))

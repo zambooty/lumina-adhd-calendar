@@ -26,14 +26,45 @@ Real connectors live in `src/connectors/googleCalendar.ts` and `src/connectors/g
 2. Bind Cursor app secrets (never paste values into chat):
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
-3. Authorized JavaScript origins must include your published app origin (and `http://127.0.0.1:5173` for local).
-4. Authorized **redirect URIs** must include the same origin with a trailing slash (e.g. `https://your-app.apps.grok.bot/`) — mobile uses redirect OAuth instead of GIS popups.
-5. In the app, **Connect Google**, then **Pull from sources**.
+3. Register the **exact** Authorized JavaScript origins and redirect URIs below (byte-for-byte).
+4. In the app, **Connect Google**, then **Pull from sources**.
+
+### Exact Google Cloud Console URIs (McKale)
+
+Published app: `https://lumina-calendar-f5eb.apps.grok.bot`
+
+McKale’s OAuth Web client already has the required published + local entries. Keep these exact strings (Google is byte-for-byte):
+
+**Authorized JavaScript origins** (no trailing slash):
+
+```
+https://lumina-calendar-f5eb.apps.grok.bot
+http://127.0.0.1:5173
+http://127.0.0.1:4173
+```
+
+Optional extras if you use hostname local instead of `127.0.0.1`: `http://localhost:5173`, `http://localhost:4173`.
+
+**Authorized redirect URIs** (bare + trailing slash — mobile sends bare `window.location.origin`):
+
+```
+https://lumina-calendar-f5eb.apps.grok.bot
+https://lumina-calendar-f5eb.apps.grok.bot/
+http://127.0.0.1:5173
+http://127.0.0.1:5173/
+http://127.0.0.1:4173
+http://127.0.0.1:4173/
+```
+
+Optional server env (comma-separated) if the published slug changes: `PUBLIC_APP_ORIGIN` or `ALLOWED_ORIGINS`.
 
 Server routes (Cursor host + Vite dev middleware):
 
 - `GET /api/google/status` — configured vs demo; returns client id for GIS when set
 - `POST /api/google/exchange` — auth-code → token exchange (required for mobile redirect flow)
+- `POST /api/google/refresh` — refresh_token → access_token
+
+Origin gate: `/api/google/exchange` and `/api/google/refresh` allow only the published app origin, local Vite origins, `Host` / `X-Forwarded-*` public host, and (when Origin/Referer are omitted on some mobile browsers) `Sec-Fetch-Site: same-origin` against that host. Arbitrary origins are rejected.
 
 Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens persist in `localStorage` (and mirror to `sessionStorage`).
 
