@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Capacitor / Android local SDK path (machine-specific)
+android/local.properties
+*.apk
+*.aab
+*.ap_
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
