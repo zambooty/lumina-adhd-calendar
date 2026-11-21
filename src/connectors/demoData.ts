@@ -13,7 +13,8 @@ const SOURCE_META: Record<
   calendar: { label: 'Calendar', accent: '#3dffd4' },
   notes: { label: 'Notes', accent: '#c8ff4d' },
   email: { label: 'Email', accent: '#4db8ff' },
-  texts: { label: 'Texts', accent: '#ffb020' },
+  texts: { label: 'SMS', accent: '#ffb020' },
+  voicemail: { label: 'Voicemail', accent: '#ff7ad9' },
 }
 
 export { SOURCE_META }

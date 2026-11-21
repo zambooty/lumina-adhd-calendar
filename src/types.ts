@@ -1,4 +1,9 @@
-export type SourceKind = 'calendar' | 'notes' | 'email' | 'texts'
+export type SourceKind =
+  | 'calendar'
+  | 'notes'
+  | 'email'
+  | 'texts'
+  | 'voicemail'
 
 export type ReminderOffset = {
   id: string

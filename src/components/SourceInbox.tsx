@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import type { EventCandidate } from '../types'
-import { connectors } from '../connectors'
+import { sourceChips } from '../connectors'
 import { safeFormatIso } from '../lib/safeDate'
+import { CaptureImport } from './CaptureImport'
 
 type Props = {
   candidates: EventCandidate[]
@@ -12,8 +13,14 @@ type Props = {
   onSchedule: (id: string) => void
   onDismiss: (id: string) => void
   onToggleAutoAdd: () => void
+  /** Optional toast hook after paste/upload queues items. */
+  onCaptureImported?: (info: { added: number }) => void
 }
 
+/**
+ * Source inbox body for the calendar-first menu shell.
+ * Capture paste/upload lives here; Google connect stays in its own menu section.
+ */
 export function SourceInbox({
   candidates,
   pulling,
@@ -23,13 +30,14 @@ export function SourceInbox({
   onSchedule,
   onDismiss,
   onToggleAutoAdd,
+  onCaptureImported,
 }: Props) {
   return (
     <div className="section-content">
       <div className="source-dots">
-        {connectors.map((c) => (
+        {sourceChips.map((c) => (
           <span
-            key={c.id}
+            key={`${c.id}-${c.label}`}
             className="source-dot"
             style={{ borderColor: `${c.accent}55`, color: c.accent }}
           >
@@ -37,6 +45,12 @@ export function SourceInbox({
           </span>
         ))}
       </div>
+
+      <CaptureImport
+        onImported={(info) => {
+          onCaptureImported?.(info)
+        }}
+      />
 
       <label className="toggle">
         <input
@@ -82,8 +96,8 @@ export function SourceInbox({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            Inbox clear. Connect Google, then Pull to load real Calendar and
-            Gmail. Notes/Texts stay empty while Google is live.
+            Inbox clear. Connect Google, paste Notes/IMAP/SMS/Voicemail above,
+            then Pull — live mode skips demo fillers.
           </motion.p>
         ) : (
           candidates.map((c) => (

@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointment candidates). Notes + Texts stay mock.
+Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointment candidates). Notes + SMS demo samples only appear when Google is not live. Paste/upload capture for Notes, IMAP email, SMS, and voicemail always works.
 
 ## Android (Capacitor) — build & run on device
 
@@ -152,7 +152,7 @@ Add the active origin(s) under **Authorized JavaScript origins** on the same OAu
 ## What’s in the app
 
 - **Calendar** — Upcoming events with vivid source colors and per-event reminder stack selection.
-- **Source inbox** — Google Calendar + Gmail (live when secrets + OAuth). Mock Notes / Texts only when Google is not live. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
+- **Source inbox** — Google Calendar + Gmail (live when secrets + OAuth) plus **Capture import** (Notes / IMAP / SMS / Voicemail paste or upload). Mock Notes / SMS only when Google is not live. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
 - **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more).
 - **Companion pet (Blink)** — XP = events pulled + events scheduled.
 - **Persistence** — `localStorage` key `lumen_adhd_companion_v2` (empty start; legacy v1 wiped once). **Reset** clears to empty — does not re-inject fake appointments.
@@ -161,12 +161,19 @@ Add the active origin(s) under **Authorized JavaScript origins** on the same OAu
 
 ## Connectors
 
-| Source   | Status                                              |
-|----------|-----------------------------------------------------|
-| Calendar | **Google Calendar** (OAuth); demo only if secrets unset |
-| Email    | **Gmail** (OAuth); demo only if secrets unset         |
-| Notes    | Mock only in demo mode; empty when Google is live   |
-| Texts    | Mock only in demo mode; empty when Google is live   |
+| Source    | Status |
+|-----------|--------|
+| Calendar  | **Google Calendar** (OAuth); demo only if secrets unset |
+| Email     | **Gmail** (OAuth) + **IMAP/other** paste + prefs stub |
+| Notes     | Paste / `.txt`·`.md` upload; mock only in demo mode |
+| SMS       | Paste import; Twilio webhook when secrets bound |
+| Voicemail | Transcript paste; Whisper STT when key bound |
+
+Optional capture secrets (paste/upload works without them): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHISPER_API_KEY` or `OPENAI_API_KEY`, `IMAP_LIVE_ENABLED`. See `docs/multi-source-capture.md`.
+
+Capture API: `GET /api/capture/status`, `POST /api/capture/transcribe`, `POST /api/capture/twilio-sms`.
+
+Native Notes / SMS / voicemail hooks for the Capacitor wrap: `docs/android-native-capture.md`.
 
 ## Design notes
 

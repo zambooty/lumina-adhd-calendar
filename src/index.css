@@ -1552,3 +1552,142 @@ a {
   font-weight: 700;
   color: var(--lime);
 }
+
+/* Capture import — nested inside Source inbox; UX PR can collapse the parent. */
+.capture-import {
+  margin: 0.85rem 0 1rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.capture-import-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
+.capture-import-hint {
+  margin: 0.2rem 0 0.65rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.capture-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+.capture-tab {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+}
+
+.capture-tab.active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.capture-provider-hint {
+  margin: 0 0 0.55rem;
+  font-size: 0.74rem;
+  color: var(--amber);
+}
+
+.capture-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 6.5rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  line-height: 1.45;
+  font-size: 16px;
+}
+
+.capture-textarea:focus {
+  outline: 2px solid rgba(61, 255, 212, 0.35);
+  outline-offset: 1px;
+}
+
+.capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.capture-status {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+}
+
+.capture-status-ok {
+  color: var(--cyan);
+}
+
+.capture-status-warn {
+  color: var(--amber);
+}
+
+.imap-prefs {
+  margin-bottom: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.imap-prefs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+@media (max-width: 640px) {
+  .imap-prefs-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.imap-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.imap-field input,
+.imap-field select {
+  min-height: 44px;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 16px;
+  color: var(--text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
