@@ -144,13 +144,10 @@ async function fetchStaticManifest(
       notes?: string
       channel?: 'debug' | 'release'
     }
-    // Prefer proxy path when API said token is configured; else GitHub browser URL.
-    const preferProxy = prior?.githubAuthConfigured === true
+    // Public GitHub browser URL first (no token). Proxy is optional fallback.
     const downloadUrl = absoluteDownloadUrl(
-      preferProxy
-        ? `/api/android/apk?tag=${encodeURIComponent(m.tag)}&asset=${encodeURIComponent(m.apkAsset)}`
-        : m.githubDownloadUrl ||
-            `/api/android/apk?tag=${encodeURIComponent(m.tag)}&asset=${encodeURIComponent(m.apkAsset)}`,
+      m.githubDownloadUrl ||
+        `https://github.com/zambooty/lumina-adhd-calendar/releases/download/${encodeURIComponent(m.tag)}/${encodeURIComponent(m.apkAsset)}`,
     )
     return {
       ok: true,
@@ -166,9 +163,9 @@ async function fetchStaticManifest(
       publishedAt: m.publishedAt,
       notes: m.notes,
       channel: m.channel,
-      proxyAvailable: preferProxy,
+      proxyAvailable: prior?.githubAuthConfigured === true,
       installHint:
-        'If in-app download fails on a private repo, open the GitHub release (or bind GITHUB_TOKEN).',
+        'Download the public GitHub Release APK, then open the system installer.',
       githubAuthConfigured: prior?.githubAuthConfigured,
     }
   } catch (e) {
@@ -293,7 +290,7 @@ export async function downloadAndInstallUpdate(
       return result
     }
 
-    // Private GitHub without proxy — offer browser fallback.
+    // Download failed — keep a clear hint; sheet still offers Open GitHub release.
     if (
       !result.ok &&
       (result.error === 'apk_auth_required' ||
@@ -304,7 +301,7 @@ export async function downloadAndInstallUpdate(
         ...result,
         hint:
           result.hint ||
-          'Private release — open GitHub to download, or bind GITHUB_TOKEN on the published app.',
+          'Could not download the APK — open the GitHub release, or retry later.',
       }
     }
 

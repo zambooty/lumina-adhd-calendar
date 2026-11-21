@@ -1,7 +1,8 @@
 /**
  * Resolve latest Android APK release for in-app updates.
- * Prefers GitHub Releases (optional GITHUB_TOKEN for private repo),
- * falls back to committed public/android-latest.json values when provided.
+ * Public repo: silent download via GitHub Releases API + browser_download_url
+ * (no token). Optional GITHUB_TOKEN is only a fallback (rate limit / private).
+ * Falls back to committed public/android-latest.json when GitHub is unreachable.
  */
 
 export const ANDROID_UPDATE_OWNER = 'zambooty'
@@ -13,9 +14,9 @@ export type AndroidLatestManifest = {
   versionName: string
   tag: string
   apkAsset: string
-  /** Relative API path or absolute https URL used when proxy/token available. */
+  /** Relative API path or absolute https URL. */
   apkUrl?: string
-  /** Public GitHub browser download URL (may 404 on private repos). */
+  /** GitHub browser download URL (works unauthenticated on public repos). */
   githubDownloadUrl?: string
   releaseUrl?: string
   sha256?: string
@@ -27,6 +28,7 @@ export type AndroidLatestManifest = {
 export type ResolvedAndroidUpdate = AndroidLatestManifest & {
   ok: true
   source: 'github' | 'manifest'
+  /** True when optional GITHUB_TOKEN is bound (proxy fallback). */
   proxyAvailable: boolean
   downloadUrl: string
   installHint: string
@@ -114,9 +116,28 @@ function channelFromTag(tag: string): 'debug' | 'release' {
   return tag.startsWith('android-release-') ? 'release' : 'debug'
 }
 
+function publicDownloadUrl(tag: string, asset: string): string {
+  return `https://github.com/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(asset)}`
+}
+
 function proxyDownloadPath(tag: string, asset: string): string {
   const q = new URLSearchParams({ tag, asset })
   return `/api/android/apk?${q.toString()}`
+}
+
+/**
+ * Prefer public browser_download_url for silent Cap download (no token).
+ * Optional app proxy is an alternate; token only helps if the asset is private.
+ */
+function pickDownloadUrl(opts: {
+  browserUrl?: string
+  tag: string
+  asset: string
+  apkUrl?: string
+}): string {
+  if (opts.browserUrl?.startsWith('https://')) return opts.browserUrl
+  if (opts.apkUrl?.startsWith('https://')) return opts.apkUrl
+  return publicDownloadUrl(opts.tag, opts.asset)
 }
 
 export async function fetchLatestGithubAndroidRelease(): Promise<
@@ -135,12 +156,20 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
     }
   }
 
-  if (res.status === 401 || res.status === 403 || res.status === 404) {
+  if (res.status === 401 || res.status === 403) {
     return {
       ok: false,
-      error: 'github_auth_required',
+      error: 'github_rate_limited',
       hint:
-        'Private repo — bind GITHUB_TOKEN (Contents: Read) on the published app, or keep public/android-latest.json current.',
+        'GitHub Releases blocked (rate limit or auth). Retry later, keep public/android-latest.json current, or optionally bind GITHUB_TOKEN.',
+    }
+  }
+  if (res.status === 404) {
+    return {
+      ok: false,
+      error: 'github_not_found',
+      hint:
+        'GitHub Releases not found — check the repo name or keep public/android-latest.json current.',
     }
   }
   if (!res.ok) {
@@ -174,9 +203,11 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
     match.tag_name.replace(/^android-(debug|release)-/, '') ||
     match.tag_name
 
-  const downloadUrl = proxyAvailable
-    ? proxyDownloadPath(match.tag_name, asset.name)
-    : asset.browser_download_url
+  const downloadUrl = pickDownloadUrl({
+    browserUrl: asset.browser_download_url,
+    tag: match.tag_name,
+    asset: asset.name,
+  })
 
   return {
     ok: true,
@@ -193,9 +224,8 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
     notes: match.body || undefined,
     channel: channelFromTag(match.tag_name),
     downloadUrl,
-    installHint: proxyAvailable
-      ? 'Download via published proxy, then open the system installer.'
-      : 'Private assets need GITHUB_TOKEN for in-app download; otherwise open the GitHub release page.',
+    installHint:
+      'Download the public GitHub Release APK, then open the system installer.',
   }
 }
 
@@ -203,11 +233,12 @@ export function resolveFromManifest(
   manifest: AndroidLatestManifest,
 ): ResolvedAndroidUpdate {
   const proxyAvailable = githubAuthConfigured()
-  const downloadUrl = proxyAvailable
-    ? proxyDownloadPath(manifest.tag, manifest.apkAsset)
-    : manifest.apkUrl ||
-      manifest.githubDownloadUrl ||
-      `https://github.com/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases/download/${encodeURIComponent(manifest.tag)}/${encodeURIComponent(manifest.apkAsset)}`
+  const downloadUrl = pickDownloadUrl({
+    browserUrl: manifest.githubDownloadUrl,
+    apkUrl: manifest.apkUrl,
+    tag: manifest.tag,
+    asset: manifest.apkAsset,
+  })
 
   return {
     ok: true,
@@ -218,7 +249,9 @@ export function resolveFromManifest(
     tag: manifest.tag,
     apkAsset: manifest.apkAsset,
     apkUrl: manifest.apkUrl,
-    githubDownloadUrl: manifest.githubDownloadUrl,
+    githubDownloadUrl:
+      manifest.githubDownloadUrl ||
+      publicDownloadUrl(manifest.tag, manifest.apkAsset),
     releaseUrl:
       manifest.releaseUrl ||
       `https://github.com/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases/tag/${encodeURIComponent(manifest.tag)}`,
@@ -227,13 +260,12 @@ export function resolveFromManifest(
     notes: manifest.notes,
     channel: manifest.channel || channelFromTag(manifest.tag),
     downloadUrl,
-    installHint: proxyAvailable
-      ? 'Download via published proxy, then open the system installer.'
-      : 'Bind GITHUB_TOKEN for private in-app APK download, or open the release page.',
+    installHint:
+      'Download the public GitHub Release APK, then open the system installer.',
   }
 }
 
-/** Stream a release asset (requires token for private repos). */
+/** Stream a release asset. Public repos need no token; token is optional fallback. */
 export async function fetchGithubReleaseAsset(opts: {
   tag: string
   asset: string
@@ -294,18 +326,15 @@ export async function fetchGithubReleaseAsset(opts: {
       status: metaRes.status === 404 ? 404 : 502,
       error: 'release_lookup_failed',
       hint:
-        metaRes.status === 401 || metaRes.status === 403 || metaRes.status === 404
-          ? 'Bind GITHUB_TOKEN with Contents: Read for private release downloads.'
+        metaRes.status === 401 || metaRes.status === 403
+          ? 'GitHub blocked the release lookup (rate limit). Retry later or optionally bind GITHUB_TOKEN.'
           : 'Could not load GitHub release metadata.',
     }
   }
 
   const release = (await metaRes.json()) as GhRelease
-  const found = pickApkAsset(
-    (release.assets || []).filter((a) => a.name === asset),
-  )
   const withId = (release.assets || []).find((a) => a.name === asset)
-  if (!withId?.url) {
+  if (!withId) {
     return {
       ok: false,
       status: 404,
@@ -313,7 +342,40 @@ export async function fetchGithubReleaseAsset(opts: {
       hint: `No asset named ${asset} on ${tag}.`,
     }
   }
-  void found
+
+  // 1) Public browser URL (no auth) — preferred for silent Cap download via proxy too.
+  if (withId.browser_download_url) {
+    try {
+      const publicRes = await fetch(withId.browser_download_url, {
+        headers: {
+          Accept: 'application/vnd.android.package-archive,*/*',
+          'User-Agent': 'lumina-android-update',
+        },
+        redirect: 'follow',
+      })
+      if (publicRes.ok) {
+        return {
+          ok: true,
+          body: publicRes.body,
+          size: withId.size ?? null,
+          contentType: 'application/vnd.android.package-archive',
+          filename: withId.name,
+        }
+      }
+    } catch {
+      /* fall through to API asset URL */
+    }
+  }
+
+  // 2) GitHub API asset URL — works publicly for public repos; token helps if private.
+  if (!withId.url) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'asset_api_missing',
+      hint: 'GitHub asset API URL missing.',
+    }
+  }
 
   const apkRes = await fetch(withId.url, {
     headers: githubHeaders('application/octet-stream'),
@@ -326,7 +388,7 @@ export async function fetchGithubReleaseAsset(opts: {
       error: 'asset_download_failed',
       hint:
         apkRes.status === 401 || apkRes.status === 403
-          ? 'GITHUB_TOKEN cannot download this private asset.'
+          ? 'Asset download blocked — if the release is private, optionally bind GITHUB_TOKEN; otherwise open the GitHub release page.'
           : `GitHub asset download failed (HTTP ${apkRes.status}).`,
     }
   }
@@ -338,4 +400,9 @@ export async function fetchGithubReleaseAsset(opts: {
     contentType: 'application/vnd.android.package-archive',
     filename: withId.name,
   }
+}
+
+/** Exposed for tests / callers that need the proxy path explicitly. */
+export function androidProxyDownloadPath(tag: string, asset: string): string {
+  return proxyDownloadPath(tag, asset)
 }

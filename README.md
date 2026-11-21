@@ -241,9 +241,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### In-app APK updates
 
-On Cap Android, **Menu → Check for updates** (also auto-checks occasionally) compares `versionCode` to the latest `android-debug-*` / `android-release-*` GitHub Release (via `/api/android/update`, fallback `public/android-latest.json`), then downloads and opens the system installer (`REQUEST_INSTALL_PACKAGES`).
-
-Private-repo in-app download needs a bound **`GITHUB_TOKEN`** (Contents: Read). Without it, use **Open GitHub release** on the sheet. Details: `docs/android-in-app-updates.md`.
+On Cap Android, **Menu → Check for updates** (also auto-checks occasionally) compares `versionCode` to the latest `android-debug-*` / `android-release-*` GitHub Release (via `/api/android/update`, fallback `public/android-latest.json`), then downloads the **public** Release APK and opens the system installer (`REQUEST_INSTALL_PACKAGES`). No `GITHUB_TOKEN` required while the repo is public. Details: `docs/android-in-app-updates.md`.
 
 ## What’s in the app
 

@@ -189,8 +189,8 @@ public class AppUpdatePlugin extends Plugin {
                         call,
                         code == 404 ? "apk_not_found" : "apk_auth_required",
                         code == 404
-                            ? "APK not found — publish a GitHub Release or bind GITHUB_TOKEN for private downloads."
-                            : "Private release — bind GITHUB_TOKEN on the published app, or open the GitHub release in a browser."
+                            ? "APK not found — publish a GitHub Release with a .apk asset, then try again."
+                            : "Download blocked — open the GitHub release in a browser, or retry later."
                     );
                     return;
                 }

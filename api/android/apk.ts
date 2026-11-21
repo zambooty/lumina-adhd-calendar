@@ -13,7 +13,7 @@ import { fetchGithubReleaseAsset } from '../../server/androidUpdate.js'
 
 /**
  * GET /api/android/apk?tag=&asset= — stream APK from GitHub Releases.
- * Private repos need GITHUB_TOKEN (Contents: Read).
+ * Public assets need no token; optional GITHUB_TOKEN is a rate-limit / private fallback.
  */
 export async function GET(request: Request): Promise<Response> {
   const limit = takeRateLimit(

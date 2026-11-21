@@ -11,6 +11,8 @@ Cap Android can check for a newer APK, download it, and open the system installe
 4. **Download & install** → APK lands in app cache → system package installer.
 5. First time: Android may ask to **allow installs from LUMINA** (`REQUEST_INSTALL_PACKAGES` / unknown apps). Allow, then tap Install again.
 
+Silent download uses the **public** GitHub Releases asset URL (`browser_download_url`) — **no `GITHUB_TOKEN` required** while the repo stays public.
+
 Pull / SMS / Google Connect are unchanged.
 
 ## Versioning
@@ -24,15 +26,13 @@ Pull / SMS / Google Connect are unchanged.
 
 Comparison is **integer `versionCode` only** (not tag date strings).
 
-## Private repo downloads
-
-The repo is private — unauthenticated GitHub asset URLs return 404.
+## Downloads (public repo)
 
 | Path | Needs |
 |------|--------|
-| Update **check** | Works via `android-latest.json` on the published app (no token) |
-| In-app **download** | Bind app secret **`GITHUB_TOKEN`** (fine-grained PAT, Contents: Read on this repo) so `/api/android/apk` can proxy the asset |
-| Fallback | Sheet → **Open GitHub release** (browser / Custom Tabs; sign in to GitHub if needed) |
+| Update **check** | Public GitHub Releases API, or `android-latest.json` fallback |
+| In-app **download** | Public release asset URL (no token) |
+| Fallback | Sheet → **Open GitHub release**; optional `GITHUB_TOKEN` only if the repo is private again or GitHub rate-limits anonymous API |
 
 Do not embed a PAT inside the APK.
 
@@ -60,7 +60,6 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 1. Merge PR → republish web app (API + `android-latest.json`).
 2. `npm run android:debug` → upload `lumina-debug.apk` to a new `android-debug-*` Release.
 3. Put `versionCode: 2` (or higher) in the release body and update `public/android-latest.json`.
-4. Optionally bind `GITHUB_TOKEN` for silent in-app downloads on the private repo.
 
 Until McKale installs that first updater APK, he still updates the old way (download from GitHub / Project media).
 
@@ -68,8 +67,8 @@ Until McKale installs that first updater APK, he still updates the old way (down
 
 | Route | Purpose |
 |-------|---------|
-| `GET /api/android/update` | Latest metadata + download URL |
-| `GET /api/android/apk?tag=&asset=` | Proxy stream (token for private) |
+| `GET /api/android/update` | Latest metadata + public download URL |
+| `GET /api/android/apk?tag=&asset=` | Optional proxy stream (public OK; token optional) |
 | `GET /android-latest.json` | Static fallback manifest |
 
 ## Native plugin
