@@ -2,10 +2,12 @@ import { readCaptureEnv, readWhisperApiKey } from '../../server/captureEnv.js'
 import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { requireGoogleAccessAuth } from '../../server/googleAccessAuth.js'
 import {
-  clientKeyFromRequest,
+  isTranscribeCallerAllowed,
   rateLimitedResponse,
+  transcribeCallerRateLimit,
+  transcribeGlobalRateLimit,
   transcribeMaxBytes,
-  transcribeRateLimit,
+  whisperSpendEnabled,
 } from '../../server/captureSecurity.js'
 import {
   corsPreflightResponse,
@@ -16,11 +18,16 @@ import {
 /**
  * POST /api/capture/transcribe — multipart audio → Whisper text.
  *
- * Auth: caller must present a live Google OAuth access token issued for
- * this app's GOOGLE_CLIENT_ID (verified via Google tokeninfo). Origin
- * allowlist + rate/size limits are defense-in-depth only — they are not
- * the sole gate. Disabled when Whisper/OpenAI key unbound; never leaks keys.
- * CORS for Capacitor → published API.
+ * Spend gate (fail-closed for a public app):
+ *   1. Origin allowlist
+ *   2. Whisper/OpenAI key bound
+ *   3. CAPTURE_TRANSCRIBE_ALLOWED_EMAILS and/or _SUBS configured
+ *   4. Caller Google access token verified for this GOOGLE_CLIENT_ID
+ *   5. Caller's email/sub is on the allowlist (any Google user is not enough)
+ *   6. Per-subject + global rate limits (not spoofable X-Forwarded-For)
+ *
+ * When the allowlist is empty, returns 503 — paste a transcript instead.
+ * Never leaks keys.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isAllowedRequestOrigin(request)) {
@@ -40,14 +47,46 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
-  // Real caller check — spoofed Origin alone cannot pass this.
+  if (!whisperSpendEnabled(env.whisperConfigured)) {
+    return jsonWithCors(
+      request,
+      {
+        error: 'whisper_allowlist_required',
+        hint:
+          'Bind CAPTURE_TRANSCRIBE_ALLOWED_EMAILS (or _SUBS) to your Google account before speech-to-text can spend the Whisper key. Paste a transcript until then.',
+      },
+      { status: 503 },
+    )
+  }
+
   const auth = await requireGoogleAccessAuth(request)
   if (!auth.ok) return auth.response
 
-  const clientKey = clientKeyFromRequest(request)
-  const limit = transcribeRateLimit(clientKey)
-  if (!limit.allowed) {
-    const limited = rateLimitedResponse(limit)
+  if (!isTranscribeCallerAllowed(auth.sub, auth.email)) {
+    return jsonWithCors(
+      request,
+      {
+        error: 'whisper_not_allowed',
+        hint:
+          'This Google account is not on the speech-to-text allowlist. Paste a transcript, or add your email to CAPTURE_TRANSCRIBE_ALLOWED_EMAILS.',
+      },
+      { status: 403 },
+    )
+  }
+
+  const callerKey = auth.sub ?? auth.email ?? 'unknown'
+  const callerLimit = transcribeCallerRateLimit(callerKey)
+  if (!callerLimit.allowed) {
+    const limited = rateLimitedResponse(callerLimit)
+    return new Response(
+      limited.body,
+      withCors(request, { status: limited.status, headers: limited.headers }),
+    )
+  }
+
+  const globalLimit = transcribeGlobalRateLimit()
+  if (!globalLimit.allowed) {
+    const limited = rateLimitedResponse(globalLimit)
     return new Response(
       limited.body,
       withCors(request, { status: limited.status, headers: limited.headers }),

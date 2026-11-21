@@ -6,10 +6,13 @@ import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import {
   consumeCaptureToken,
+  isTranscribeCallerAllowed,
   mintCaptureToken,
+  readTranscribeAllowlist,
   resetCaptureTokens,
   verifyTwilioSignature,
   twilioWebhookUrl,
+  whisperSpendEnabled,
   DEFAULT_TRANSCRIBE_MAX_BYTES,
 } from '../server/captureSecurity.ts'
 import { readGoogleAccessToken } from '../server/googleAccessAuth.ts'
@@ -120,5 +123,32 @@ assert.equal(
 )
 
 assert.ok(DEFAULT_TRANSCRIBE_MAX_BYTES >= 1_000_000)
+
+// Whisper spend fail-closed without allowlist
+{
+  const prevEmails = process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS
+  const prevSubs = process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS
+  delete process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS
+  delete process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS
+  assert.equal(readTranscribeAllowlist().configured, false)
+  assert.equal(whisperSpendEnabled(true), false)
+  assert.equal(isTranscribeCallerAllowed('sub1', 'a@b.com'), false)
+
+  process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS = 'Owner@Example.com'
+  assert.equal(readTranscribeAllowlist().configured, true)
+  assert.equal(whisperSpendEnabled(true), true)
+  assert.equal(isTranscribeCallerAllowed(null, 'owner@example.com'), true)
+  assert.equal(isTranscribeCallerAllowed(null, 'other@example.com'), false)
+
+  delete process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS
+  process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS = 'google-sub-123'
+  assert.equal(isTranscribeCallerAllowed('google-sub-123', null), true)
+  assert.equal(isTranscribeCallerAllowed('other-sub', null), false)
+
+  if (prevEmails === undefined) delete process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS
+  else process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS = prevEmails
+  if (prevSubs === undefined) delete process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS
+  else process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS = prevSubs
+}
 
 console.log('capture security checks passed')

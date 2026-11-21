@@ -14,7 +14,12 @@ export { NO_STORE }
 const MAX_ACCESS_TOKEN_LEN = 8192
 
 export type GoogleAccessAuthResult =
-  | { ok: true; sub: string | null; expiresIn: number | null }
+  | {
+      ok: true
+      sub: string | null
+      email: string | null
+      expiresIn: number | null
+    }
   | { ok: false; error: string; status: number }
 
 /** Extract Bearer token from Authorization, or X-Lumina-Google-Access-Token. */
@@ -38,6 +43,7 @@ type TokenInfo = {
   aud?: string
   azp?: string
   sub?: string
+  email?: string
   expires_in?: string | number
   error?: string
   error_description?: string
@@ -108,9 +114,11 @@ export async function verifyGoogleAccessToken(
     return { ok: false, error: 'google_auth_expired', status: 401 }
   }
 
+  const emailRaw = typeof info.email === 'string' ? info.email.trim() : ''
   return {
     ok: true,
     sub: typeof info.sub === 'string' ? info.sub.slice(0, 128) : null,
+    email: emailRaw ? emailRaw.toLowerCase().slice(0, 320) : null,
     expiresIn: expiresIn != null && Number.isFinite(expiresIn) ? expiresIn : null,
   }
 }
@@ -118,7 +126,10 @@ export async function verifyGoogleAccessToken(
 /** Convenience: read + verify; returns a Response on failure. */
 export async function requireGoogleAccessAuth(
   request: Request,
-): Promise<{ ok: true; sub: string | null } | { ok: false; response: Response }> {
+): Promise<
+  | { ok: true; sub: string | null; email: string | null }
+  | { ok: false; response: Response }
+> {
   const token = readGoogleAccessToken(request)
   if (!token) {
     return {
@@ -152,5 +163,5 @@ export async function requireGoogleAccessAuth(
     }
   }
 
-  return { ok: true, sub: result.sub }
+  return { ok: true, sub: result.sub, email: result.email }
 }

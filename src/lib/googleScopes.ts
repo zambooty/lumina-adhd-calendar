@@ -5,9 +5,16 @@ export const CALENDAR_READONLY_SCOPE =
 export const GMAIL_READONLY_SCOPE =
   'https://www.googleapis.com/auth/gmail.readonly'
 
-export const GOOGLE_SCOPES = [CALENDAR_READONLY_SCOPE, GMAIL_READONLY_SCOPE].join(
-  ' ',
-)
+/** Needed so tokeninfo returns email for speech-to-text allowlisting. */
+export const OPENID_SCOPE = 'openid'
+export const EMAIL_SCOPE = 'email'
+
+export const GOOGLE_SCOPES = [
+  OPENID_SCOPE,
+  EMAIL_SCOPE,
+  CALENDAR_READONLY_SCOPE,
+  GMAIL_READONLY_SCOPE,
+].join(' ')
 
 export function parseScopeString(scope?: string | null): string[] {
   if (!scope || typeof scope !== 'string') return []

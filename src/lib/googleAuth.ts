@@ -464,12 +464,18 @@ export async function hydrateGoogleAuthFromRedirect(): Promise<{
       return
     }
 
-    if (expectedState && state && expectedState !== state) {
+    // Require CSRF state on every code exchange — missing state is not OK.
+    if (!expectedState || !state || expectedState !== state) {
       sessionStorage.setItem(AUTH_FLASH_KEY, 'state_mismatch')
       return
     }
 
-    const result = await exchangeCode(code!, redirectUri)
+    if (!code) {
+      sessionStorage.setItem(AUTH_FLASH_KEY, 'exchange_failed')
+      return
+    }
+
+    const result = await exchangeCode(code, redirectUri)
     if (result.ok && redirectScope && !getGoogleGrantedScopes()) {
       const stored = readStored()
       if (stored?.accessToken) {

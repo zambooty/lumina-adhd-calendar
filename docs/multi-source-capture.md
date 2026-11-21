@@ -12,13 +12,15 @@ Import → local queue → **Pull from sources** → inbox → schedule (default
 | Secret | Effect |
 |--------|--------|
 | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` | `/api/capture/twilio-sms` accepts signed webhooks |
-| `WHISPER_API_KEY` or `OPENAI_API_KEY` | `/api/capture/transcribe` speech-to-text |
+| `WHISPER_API_KEY` or `OPENAI_API_KEY` | Speech-to-text key (spend still needs allowlist) |
+| `CAPTURE_TRANSCRIBE_ALLOWED_EMAILS` | Comma-separated Google emails allowed to spend Whisper |
+| `CAPTURE_TRANSCRIBE_ALLOWED_SUBS` | Optional Google subject IDs (same allowlist) |
 | `IMAP_LIVE_ENABLED=true` | Flags IMAP live path (fetch still stubbed; paste works) |
 
-`GET /api/capture/status` — booleans only (`sttRequiresGoogle: true`).
+`GET /api/capture/status` — booleans only (`whisperConfigured` = key + allowlist; `sttRequiresGoogle` / `sttRequiresAllowlist`).
 
 ### Security
-- **Transcribe** — verified Google access token (aud/azp = `GOOGLE_CLIENT_ID`) required; origin allowlist + 10MB cap + rate limit as defense-in-depth; `503` when key unbound; never returns key material. Paste still works without Google.
+- **Transcribe** — fail-closed: Whisper key + allowlist required; caller must present a Google token for this app whose email/sub is allowlisted; per-subject + global rate limits; size cap; origin allowlist. Any signed-in Google user cannot spend the owner key. Paste always works without STT.
 - **Twilio** — validates `X-Twilio-Signature` with auth token when configured; rejects unsigned.
 
 ## Demo-off when Google live

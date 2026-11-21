@@ -67,7 +67,7 @@ export async function transcribeVoicemailAudio(
       added: 0,
       usedStub: true,
       error:
-        'No Whisper / OpenAI key bound — paste a transcript instead, or bind WHISPER_API_KEY / OPENAI_API_KEY.',
+        'Speech-to-text is not enabled — paste a transcript, or bind a Whisper key plus CAPTURE_TRANSCRIBE_ALLOWED_EMAILS.',
     }
   }
 
