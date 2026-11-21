@@ -17,6 +17,8 @@ android/local.properties
 *.apk
 *.aab
 *.ap_
+# Keep the published sideload APK under releases/ (tracked via Git LFS)
+!releases/*.apk
 
 # Editor directories and files
 .vscode/*
