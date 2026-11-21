@@ -199,7 +199,7 @@ Capture API: `GET /api/capture/status`, `POST /api/capture/transcribe`, `POST /a
 
 Hardening on capture routes:
 
-- **Transcribe** — static origin allowlist (no Host expansion); disabled when Whisper/OpenAI unbound; short-lived one-shot `captureToken` from origin-gated status (`X-Lumina-Capture-Token`); size + rate limits; no key/upstream leakage.
+- **Transcribe** — **requires a live Google access token** for this app’s `GOOGLE_CLIENT_ID` (verified with Google tokeninfo; `Authorization: Bearer …`). Spoofed Origin alone cannot spend Whisper. Also: origin allowlist, size + rate limits; disabled when Whisper/OpenAI unbound; no key/upstream leakage. Paste transcript still works without Google.
 - **Twilio SMS** — when configured, requires valid `X-Twilio-Signature` (HMAC-SHA1); unsigned requests → `403`.
 
 Native Notes / SMS / voicemail hooks for the Capacitor wrap: `docs/android-native-capture.md`.

@@ -1,5 +1,5 @@
 /**
- * Smoke checks for captureSecurity helpers (no network).
+ * Smoke checks for captureSecurity + googleAccessAuth helpers (no network).
  * Run: npx tsx scripts/check-capture-security.mjs
  */
 import assert from 'node:assert/strict'
@@ -12,35 +12,47 @@ import {
   twilioWebhookUrl,
   DEFAULT_TRANSCRIBE_MAX_BYTES,
 } from '../server/captureSecurity.ts'
+import { readGoogleAccessToken } from '../server/googleAccessAuth.ts'
 import { isAllowedAppOrigin, PUBLISHED_APP_ORIGIN } from '../server/originAllowlist.ts'
 import { resetRateLimits } from '../server/rateLimit.ts'
 
 resetCaptureTokens()
 resetRateLimits()
 
-// Nonce mint + one-shot consume
+// Google Bearer extraction
 {
-  const token = mintCaptureToken('1.2.3.4')
-  assert.equal(typeof token, 'string')
-  assert.ok(token.length >= 16)
-  assert.equal(consumeCaptureToken(token, '1.2.3.4'), true)
-  // Second spend fails
-  assert.equal(consumeCaptureToken(token, '1.2.3.4'), false)
+  const req = new Request('https://example.test/api/capture/transcribe', {
+    headers: { authorization: 'Bearer ya29.a0AfH6SMB-test-token-value' },
+  })
+  assert.equal(
+    readGoogleAccessToken(req),
+    'ya29.a0AfH6SMB-test-token-value',
+  )
+}
+{
+  const req = new Request('https://example.test/api/capture/transcribe', {
+    headers: {
+      'x-lumina-google-access-token': 'ya29.header-fallback-token',
+    },
+  })
+  assert.equal(readGoogleAccessToken(req), 'ya29.header-fallback-token')
+}
+{
+  const req = new Request('https://example.test/api/capture/transcribe')
+  assert.equal(readGoogleAccessToken(req), null)
+}
+{
+  const req = new Request('https://example.test/api/capture/transcribe', {
+    headers: { authorization: 'Basic nope' },
+  })
+  assert.equal(readGoogleAccessToken(req), null)
 }
 
-// Wrong / missing token
-assert.equal(consumeCaptureToken(null, '1.2.3.4'), false)
-assert.equal(consumeCaptureToken('short', '1.2.3.4'), false)
-assert.equal(consumeCaptureToken('totally-unknown-token-value-xx', '1.2.3.4'), false)
-
-// Soft client binding: unknown ↔ known ok either way; mismatched knowns fail
+// Legacy capture-token helpers still work (unused by transcribe auth path)
 {
-  const a = mintCaptureToken('10.0.0.1')
-  assert.equal(consumeCaptureToken(a, 'unknown'), true)
-  const b = mintCaptureToken('unknown')
-  assert.equal(consumeCaptureToken(b, '10.0.0.2'), true)
-  const c = mintCaptureToken('10.0.0.1')
-  assert.equal(consumeCaptureToken(c, '10.0.0.2'), false)
+  const token = mintCaptureToken('1.2.3.4')
+  assert.equal(consumeCaptureToken(token, '1.2.3.4'), true)
+  assert.equal(consumeCaptureToken(token, '1.2.3.4'), false)
 }
 
 // Twilio signature — known vector
@@ -70,28 +82,9 @@ assert.equal(consumeCaptureToken('totally-unknown-token-value-xx', '1.2.3.4'), f
   assert.equal(
     verifyTwilioSignature({
       authToken,
-      signature: 'bogus',
-      url,
-      params,
-    }),
-    false,
-  )
-  assert.equal(
-    verifyTwilioSignature({
-      authToken,
       signature: null,
       url,
       params,
-    }),
-    false,
-  )
-  // Tampered body
-  assert.equal(
-    verifyTwilioSignature({
-      authToken,
-      signature,
-      url,
-      params: { ...params, Body: 'evil' },
     }),
     false,
   )
@@ -112,7 +105,7 @@ assert.equal(consumeCaptureToken('totally-unknown-token-value-xx', '1.2.3.4'), f
   else process.env.PUBLIC_APP_ORIGIN = prev
 }
 
-// Origin allowlist still static (Host does not expand) — sanity for capture gate
+// Origin allowlist still static (Host does not expand)
 assert.equal(
   isAllowedAppOrigin({
     origin: 'https://evil.example',

@@ -15,10 +15,10 @@ Import → local queue → **Pull from sources** → inbox → schedule (default
 | `WHISPER_API_KEY` or `OPENAI_API_KEY` | `/api/capture/transcribe` speech-to-text |
 | `IMAP_LIVE_ENABLED=true` | Flags IMAP live path (fetch still stubbed; paste works) |
 
-`GET /api/capture/status` — booleans only + short-lived `captureToken` (allowlisted Origin) for STT.
+`GET /api/capture/status` — booleans only (`sttRequiresGoogle: true`).
 
 ### Security
-- **Transcribe** — origin allowlist, one-shot capture token, 10MB cap, rate limit; `503` when key unbound; never returns key material.
+- **Transcribe** — verified Google access token (aud/azp = `GOOGLE_CLIENT_ID`) required; origin allowlist + 10MB cap + rate limit as defense-in-depth; `503` when key unbound; never returns key material. Paste still works without Google.
 - **Twilio** — validates `X-Twilio-Signature` with auth token when configured; rejects unsigned.
 
 ## Demo-off when Google live

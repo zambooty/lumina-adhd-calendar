@@ -1,7 +1,6 @@
 /**
  * Client-side capture provider status (Twilio / Whisper / IMAP live).
  * Mirrors /api/capture/status — never exposes secret values.
- * Caches a short-lived captureToken for POST /api/capture/transcribe.
  */
 import type { CaptureProviderStatus } from '../connectors/types'
 
@@ -12,8 +11,8 @@ const FALLBACK: CaptureProviderStatus = {
 }
 
 type CaptureConfigCache = CaptureProviderStatus & {
-  captureToken?: string | null
-  captureTokenExpiresAt?: number
+  sttRequiresGoogle?: boolean
+  googleConfigured?: boolean
 }
 
 let cached: CaptureConfigCache | null = null
@@ -49,20 +48,13 @@ export async function fetchCaptureConfig(
         cached = { ...FALLBACK }
         return FALLBACK
       }
-      const data = (await res.json()) as Partial<CaptureConfigCache> & {
-        captureTokenTtlSec?: number
-      }
-      const ttlSec =
-        typeof data.captureTokenTtlSec === 'number' && data.captureTokenTtlSec > 0
-          ? data.captureTokenTtlSec
-          : 300
+      const data = (await res.json()) as Partial<CaptureConfigCache>
       cached = {
         twilioConfigured: Boolean(data.twilioConfigured),
         whisperConfigured: Boolean(data.whisperConfigured),
         imapLiveConfigured: Boolean(data.imapLiveConfigured),
-        captureToken:
-          typeof data.captureToken === 'string' ? data.captureToken : null,
-        captureTokenExpiresAt: Date.now() + ttlSec * 1000,
+        sttRequiresGoogle: data.sttRequiresGoogle !== false,
+        googleConfigured: Boolean(data.googleConfigured),
       }
       return asStatus(cached)
     } catch {
@@ -80,23 +72,7 @@ export function getCachedCaptureConfig(): CaptureProviderStatus | null {
   return cached ? asStatus(cached) : null
 }
 
-/**
- * Returns a spendable capture token, refreshing status when missing/expired.
- * Tokens are one-shot server-side — call once per transcribe attempt.
- */
-export async function takeCaptureToken(): Promise<string | null> {
-  const fresh =
-    !cached?.captureToken ||
-    !cached.captureTokenExpiresAt ||
-    Date.now() >= cached.captureTokenExpiresAt - 5_000
-  if (fresh) {
-    await fetchCaptureConfig(true)
-  }
-  const token = cached?.captureToken ?? null
-  // Clear locally so we don't reuse a one-shot token after a successful spend.
-  if (cached) {
-    cached.captureToken = null
-    cached.captureTokenExpiresAt = 0
-  }
-  return token
+/** True when speech-to-text needs a Connected Google session (default yes). */
+export function sttRequiresGoogle(): boolean {
+  return cached?.sttRequiresGoogle !== false
 }

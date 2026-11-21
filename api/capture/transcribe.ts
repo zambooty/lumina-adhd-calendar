@@ -1,11 +1,10 @@
 import { readCaptureEnv, readWhisperApiKey } from '../../server/captureEnv.js'
 import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
+import { requireGoogleAccessAuth } from '../../server/googleAccessAuth.js'
 import {
   NO_STORE,
   clientKeyFromRequest,
-  consumeCaptureToken,
   rateLimitedResponse,
-  readCaptureTokenHeader,
   transcribeMaxBytes,
   transcribeRateLimit,
 } from '../../server/captureSecurity.js'
@@ -13,11 +12,10 @@ import {
 /**
  * POST /api/capture/transcribe — multipart audio → Whisper text.
  *
- * Hardening:
- * - Static origin allowlist only (Host / X-Forwarded never expands it)
- * - Short-lived one-shot captureToken from gated /api/capture/status
- * - Upload size cap + per-IP rate limit
- * - Disabled (503) when Whisper/OpenAI key unbound; never leaks keys
+ * Auth: caller must present a live Google OAuth access token issued for
+ * this app's GOOGLE_CLIENT_ID (verified via Google tokeninfo). Origin
+ * allowlist + rate/size limits are defense-in-depth only — they are not
+ * the sole gate. Disabled when Whisper/OpenAI key unbound; never leaks keys.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isAllowedRequestOrigin(request)) {
@@ -39,21 +37,14 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
+  // Real caller check — spoofed Origin alone cannot pass this.
+  const auth = await requireGoogleAccessAuth(request)
+  if (!auth.ok) return auth.response
+
   const clientKey = clientKeyFromRequest(request)
   const limit = transcribeRateLimit(clientKey)
   if (!limit.allowed) {
     return rateLimitedResponse(limit)
-  }
-
-  const captureToken = readCaptureTokenHeader(request)
-  if (!consumeCaptureToken(captureToken, clientKey)) {
-    return Response.json(
-      {
-        error: 'capture_token_required',
-        hint: 'Refresh capture status (same-origin) to mint a short-lived token, then retry.',
-      },
-      { status: 403, headers: NO_STORE },
-    )
   }
 
   const maxBytes = transcribeMaxBytes()
@@ -110,10 +101,6 @@ export async function POST(request: Request): Promise<Response> {
       },
       body: upstream,
     })
-    const payload = (await res.json()) as {
-      text?: string
-      error?: { message?: string; type?: string }
-    }
     if (!res.ok) {
       // Never forward upstream message bodies that might echo request metadata.
       return Response.json(
@@ -121,6 +108,7 @@ export async function POST(request: Request): Promise<Response> {
         { status: 502, headers: NO_STORE },
       )
     }
+    const payload = (await res.json()) as { text?: string }
     return Response.json(
       { transcript: typeof payload.text === 'string' ? payload.text : '' },
       { headers: NO_STORE },

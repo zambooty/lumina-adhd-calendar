@@ -7,7 +7,8 @@ import type { ConnectorPullResult, SourceConnector } from './types'
 import { SOURCE_META } from './demoData'
 import { textToCandidates } from '../lib/textToCandidates'
 import { enqueueImports, takeImports } from '../lib/importQueue'
-import { fetchCaptureConfig, takeCaptureToken } from '../lib/captureConfig'
+import { fetchCaptureConfig } from '../lib/captureConfig'
+import { ensureGoogleAccessToken, isGoogleConnected } from '../lib/googleAuth'
 
 export const voicemailConnector: SourceConnector = {
   id: 'voicemail',
@@ -23,15 +24,16 @@ export const voicemailConnector: SourceConnector = {
     if (capture.whisperConfigured) {
       return {
         candidates: [],
-        emptyHint:
-          'Speech-to-text is ready — upload a voicemail audio file, or paste a transcript.',
+        emptyHint: isGoogleConnected()
+          ? 'Speech-to-text is ready — upload a voicemail audio file, or paste a transcript.'
+          : 'Speech-to-text needs Connect Google — or paste a transcript.',
       }
     }
 
     return {
       candidates: [],
       emptyHint:
-        'No voicemail imports yet — paste a transcript, or upload audio (STT needs a Whisper key).',
+        'No voicemail imports yet — paste a transcript, or upload audio (STT needs a Whisper key + Google).',
     }
   },
   async ingestText(text, meta) {
@@ -68,13 +70,13 @@ export async function transcribeVoicemailAudio(
     }
   }
 
-  const captureToken = await takeCaptureToken()
-  if (!captureToken) {
+  const googleAccessToken = await ensureGoogleAccessToken()
+  if (!googleAccessToken) {
     return {
       ok: false,
       added: 0,
       error:
-        'Could not mint a capture token — refresh the page and retry, or paste a transcript.',
+        'Connect Google to use speech-to-text, or paste a transcript instead.',
     }
   }
 
@@ -88,17 +90,31 @@ export async function transcribeVoicemailAudio(
       body,
       credentials: 'same-origin',
       headers: {
-        'x-lumina-capture-token': captureToken,
+        authorization: `Bearer ${googleAccessToken}`,
       },
     })
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as {
         error?: string
       }
+      const code = payload.error ?? `transcribe_${res.status}`
+      if (
+        code === 'google_auth_required' ||
+        code === 'google_auth_invalid' ||
+        code === 'google_auth_expired' ||
+        code === 'google_auth_audience'
+      ) {
+        return {
+          ok: false,
+          added: 0,
+          error:
+            'Google session expired — Connect Google again, or paste a transcript.',
+        }
+      }
       return {
         ok: false,
         added: 0,
-        error: payload.error ?? `transcribe_${res.status}`,
+        error: code,
       }
     }
     const payload = (await res.json()) as { transcript?: string }
