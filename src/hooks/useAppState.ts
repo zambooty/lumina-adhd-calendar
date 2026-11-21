@@ -228,10 +228,52 @@ export function useAppState() {
         ? ` · native ${nativeBits.join(' + ')}`
         : ''
 
-      if (meta.errors.length) {
-        const errLine = meta.errors[0]
+      const smsHint =
+        meta.emptyHints.find((h) => /\bSMS\b/i.test(h)) ?? null
+      const googleUnsigned = meta.errors.find((e) =>
+        /not signed in/i.test(e),
+      )
+      // Non-Google errors still matter; unsigned Google must not hide SMS.
+      const otherErrors = meta.errors.filter((e) => !/not signed in/i.test(e))
+
+      if (freshCount > 0) {
+        const base =
+          autoScheduled > 0
+            ? `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`
+            : `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`
+        const withSkip = skipLine ? `${base} · ${skipLine}` : base
+        const withGoogle =
+          googleUnsigned && !meta.native?.smsAdded
+            ? `${withSkip} · ${googleUnsigned}`
+            : googleUnsigned && meta.native?.smsAdded
+              ? `${withSkip} · Google still needs Menu → Connect`
+              : withSkip
+        setPullStatus(withGoogle)
+        flash(
+          autoScheduled > 0
+            ? `${modeTag}${nativeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`
+            : `${modeTag}${nativeTag} · ${freshCount} new · pet XP up`,
+        )
+      } else if (smsHint) {
+        // Permission denied / scanned-none / empty inbox — always visible.
+        const status = skipLine ? `${smsHint} · ${skipLine}` : smsHint
+        setPullStatus(
+          googleUnsigned ? `${status} · ${googleUnsigned}` : status,
+        )
+        flash(
+          skipLine
+            ? `${modeTag}${nativeTag} · 0 new · ${skipLine}`
+            : `${modeTag}${nativeTag} · 0 new · SMS`,
+        )
+      } else if (otherErrors.length) {
+        const errLine = otherErrors[0]
         setPullStatus(skipLine ? `${errLine} · ${skipLine}` : errLine)
         flash(`${modeTag}${nativeTag} · ${errLine}`)
+      } else if (googleUnsigned) {
+        setPullStatus(
+          skipLine ? `${googleUnsigned} · ${skipLine}` : googleUnsigned,
+        )
+        flash(`${modeTag}${nativeTag} · ${googleUnsigned}`)
       } else if (freshCount === 0) {
         const hint =
           skipLine ??
@@ -249,16 +291,6 @@ export function useAppState() {
             ? `${modeTag}${nativeTag} · 0 new · ${skipLine}`
             : `${modeTag}${nativeTag} · 0 new`,
         )
-      } else if (autoScheduled > 0) {
-        const base = `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`
-        setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
-        flash(
-          `${modeTag}${nativeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`,
-        )
-      } else {
-        const base = `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`
-        setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
-        flash(`${modeTag}${nativeTag} · ${freshCount} new · pet XP up`)
       }
     } catch (err) {
       const message =

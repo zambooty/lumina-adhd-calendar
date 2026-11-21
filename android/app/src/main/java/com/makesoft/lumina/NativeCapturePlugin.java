@@ -5,6 +5,7 @@ import android.content.ContentResolver;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.Settings;
 import android.provider.Telephony;
 import android.util.Base64;
 
@@ -22,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Sideload / debug native capture:
@@ -114,6 +116,12 @@ public class NativeCapturePlugin extends Plugin {
         }
     }
 
+    /** Always lowercase granted/denied/prompt for JS comparisons. */
+    private static String smsStateString(PermissionState state) {
+        if (state == null) return "prompt";
+        return state.toString().toLowerCase(Locale.ROOT);
+    }
+
     @PluginMethod
     public void getCapabilities(PluginCall call) {
         JSObject ret = new JSObject();
@@ -129,7 +137,7 @@ public class NativeCapturePlugin extends Plugin {
     @PluginMethod
     public void checkSmsPermission(PluginCall call) {
         JSObject ret = new JSObject();
-        ret.put("sms", getPermissionState("sms").toString());
+        ret.put("sms", smsStateString(getPermissionState("sms")));
         call.resolve(ret);
     }
 
@@ -141,13 +149,37 @@ public class NativeCapturePlugin extends Plugin {
             call.resolve(ret);
             return;
         }
+        // Permanent deny: system dialog may not show — still resolve via callback.
         requestPermissionForAlias("sms", call, "smsPermCallback");
     }
 
     @PermissionCallback
     private void smsPermCallback(PluginCall call) {
         JSObject ret = new JSObject();
-        ret.put("sms", getPermissionState("sms").toString());
+        ret.put("sms", smsStateString(getPermissionState("sms")));
+        call.resolve(ret);
+    }
+
+    /**
+     * Opens system App Info for LUMINA so the user can re-enable SMS after a
+     * permanent deny (Don't ask again).
+     */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.fromParts("package", getContext().getPackageName(), null));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            ret.put("ok", true);
+        } catch (Exception e) {
+            ret.put("ok", false);
+            ret.put(
+                "error",
+                e.getMessage() != null ? e.getMessage() : "Could not open app settings."
+            );
+        }
         call.resolve(ret);
     }
 
@@ -159,14 +191,15 @@ public class NativeCapturePlugin extends Plugin {
             denied.put("error", "sms_permission_denied");
             denied.put("hint", "Grant SMS permission, or paste/share a thread instead.");
             denied.put("messages", new JSArray());
+            denied.put("count", 0);
             call.resolve(denied);
             return;
         }
 
-        int max = call.getInt("max", 40);
+        int max = call.getInt("max", 200);
         if (max < 1) max = 1;
-        if (max > 100) max = 100;
-        int days = call.getInt("days", 14);
+        if (max > 300) max = 300;
+        int days = call.getInt("days", 30);
         if (days < 1) days = 1;
         if (days > 90) days = 90;
         long since = System.currentTimeMillis() - (days * 24L * 60L * 60L * 1000L);
@@ -197,7 +230,7 @@ public class NativeCapturePlugin extends Plugin {
                     String body = bodyIdx >= 0 ? cursor.getString(bodyIdx) : null;
                     if (body == null || body.trim().isEmpty()) continue;
                     JSObject row = new JSObject();
-                    row.put("address", addressIdx >= 0 ? cursor.getString(addressIdx) : "");
+                    row.put("address", addressIdx >= 0 ? nullToEmpty(cursor.getString(addressIdx)) : "");
                     row.put("body", body);
                     row.put("date", dateIdx >= 0 ? cursor.getLong(dateIdx) : 0L);
                     row.put("type", typeIdx >= 0 ? cursor.getInt(typeIdx) : 0);
@@ -210,6 +243,7 @@ public class NativeCapturePlugin extends Plugin {
             denied.put("error", "sms_permission_denied");
             denied.put("hint", "SMS permission was revoked — grant again or paste a thread.");
             denied.put("messages", new JSArray());
+            denied.put("count", 0);
             call.resolve(denied);
             return;
         } catch (Exception e) {
@@ -218,6 +252,7 @@ public class NativeCapturePlugin extends Plugin {
             err.put("error", "sms_read_failed");
             err.put("hint", e.getMessage() != null ? e.getMessage() : "Could not read SMS inbox.");
             err.put("messages", new JSArray());
+            err.put("count", 0);
             call.resolve(err);
             return;
         }
@@ -229,6 +264,10 @@ public class NativeCapturePlugin extends Plugin {
         ret.put("messages", arr);
         ret.put("count", rows.size());
         call.resolve(ret);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value != null ? value : "";
     }
 
     @PluginMethod

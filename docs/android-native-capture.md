@@ -5,7 +5,7 @@ On **Capacitor Android**, **Pull** is one button: Google Calendar + Gmail (when 
 ## What Pull does on device
 
 1. **Share-target drain** — any text/audio shared into LUMINA since last consume.
-2. **SMS inbox** — requests `READ_SMS`, scans recent messages with appointment heuristics, ingests hits via `smsConnector.ingestText`.
+2. **SMS inbox** — requests `READ_SMS` (with timeout), scans up to ~200 messages / 30 days with appointment heuristics, ingests hits via `smsConnector.ingestText`. Denied / empty / no-hits always surface a Pull status (not buried under Google unsigned). Paste/share remains the fallback.
 3. **Voicemail** — OEM visual-voicemail APIs are **not** wired (fragmented). Shared `audio/*` → Whisper `/api/capture/transcribe` when Google-connected + Whisper key; otherwise paste transcript.
 4. **Email** — Gmail via existing Google token; IMAP prefs / paste unchanged.
 5. **Notes** — Android share-target (`text/plain`) + paste/upload fallback.
