@@ -5,9 +5,12 @@
  * (not https://….apps.grok.bot). Comparing browser Origin to that URL always
  * fails → forbidden_origin — including mobile after redirect OAuth.
  *
- * Allow when Origin/Referer matches a known public app origin (or the
- * Host / X-Forwarded-* public host), plus common mobile / Capacitor cases.
- * Do not accept arbitrary origins.
+ * Allow when Origin/Referer matches a *static* known public app origin
+ * (published + local Vite + Capacitor + PUBLIC_APP_ORIGIN / ALLOWED_ORIGINS),
+ * plus Sec-Fetch-Site: same-origin when Host itself is on that static list.
+ *
+ * Do NOT expand the allowlist from client-controlled Host / X-Forwarded-*
+ * (spoofable on some edges) or from request.url (often an internal host).
  */
 
 /** Published Lumina app (no trailing slash — URL.origin form). */
@@ -22,7 +25,7 @@ export const LOCAL_DEV_ORIGINS = [
 ] as const
 
 /**
- * Capacitor / Ionic WebView origins (future Android wrap + some in-app browsers).
+ * Capacitor / Ionic WebView origins (Android wrap + some in-app browsers).
  * Only localhost hosts — never arbitrary capacitor:// hosts.
  */
 export const CAPACITOR_ORIGINS = [
@@ -130,14 +133,11 @@ function addOriginAndAliases(target: Set<string>, origin: string): void {
 }
 
 /**
- * Public origins we trust for this deployment.
- * Includes published app (+ www), local Vite, Capacitor, env overrides,
- * and Host / X-Forwarded-* public host.
+ * Static public origins we trust for this deployment.
+ * Includes published app (+ www), local Vite, Capacitor, and env overrides.
+ * Does not include Host / X-Forwarded-* or request.url (spoofable / internal).
  */
-export function allowedAppOrigins(
-  headers: OriginCheckHeaders,
-  requestUrl?: string | null,
-): Set<string> {
+export function staticAllowedOrigins(): Set<string> {
   const allowed = new Set<string>()
 
   addOriginAndAliases(allowed, PUBLISHED_APP_ORIGIN)
@@ -148,36 +148,18 @@ export function allowedAppOrigins(
   }
   for (const o of originsFromEnv()) addOriginAndAliases(allowed, o)
 
-  if (requestUrl) {
-    try {
-      addOriginAndAliases(allowed, new URL(requestUrl).origin)
-    } catch {
-      /* ignore malformed */
-    }
-  }
-
-  const xfHost = firstForwarded(headerValue(headers['x-forwarded-host']))
-  const host = xfHost || firstForwarded(headerValue(headers.host))
-  if (host) {
-    const xfProto = firstForwarded(headerValue(headers['x-forwarded-proto']))
-    let proto = xfProto
-    if (!proto && requestUrl) {
-      try {
-        proto = new URL(requestUrl).protocol.replace(':', '')
-      } catch {
-        proto = null
-      }
-    }
-    if (!proto) {
-      // Published Cursor apps are HTTPS; bare Host without proto → assume https
-      // unless it's clearly loopback / capacitor.
-      proto = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host) ? 'http' : 'https'
-    }
-    const fromHost = normalizeOrigin(`${proto}://${host}`)
-    if (fromHost) addOriginAndAliases(allowed, fromHost)
-  }
-
   return allowed
+}
+
+/**
+ * @deprecated Prefer staticAllowedOrigins(). Kept as a named alias so older
+ * call sites / docs stay readable; headers/requestUrl are ignored.
+ */
+export function allowedAppOrigins(
+  _headers?: OriginCheckHeaders,
+  _requestUrl?: string | null,
+): Set<string> {
+  return staticAllowedOrigins()
 }
 
 function claimMatchesAllowlist(
@@ -205,20 +187,56 @@ function hostIsAllowlisted(host: string, allowed: Set<string>): boolean {
 }
 
 /**
+ * True when redirect_uri is an allowlisted origin (exact or trailing slash).
+ * Rejects paths, query strings, fragments, and arbitrary hosts.
+ */
+export function isAllowedRedirectUri(
+  redirectUri: string,
+  _headers?: OriginCheckHeaders,
+): boolean {
+  const trimmed = redirectUri.trim()
+  if (!trimmed || trimmed.length > 512) return false
+
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    return false
+  }
+
+  if (!TRUSTED_SCHEMES.has(url.protocol)) return false
+  if (url.username || url.password) return false
+  if (url.search || url.hash) return false
+  // Origin form only: empty path or a single trailing slash.
+  if (url.pathname !== '/' && url.pathname !== '') return false
+
+  if (url.protocol === 'capacitor:' || url.protocol === 'ionic:') {
+    if (url.hostname !== 'localhost') return false
+  }
+
+  const origin = normalizeOrigin(trimmed)
+  if (!origin) return false
+
+  const allowed = staticAllowedOrigins()
+  if (allowed.has(origin)) return true
+  return originAliases(origin).some((alias) => allowed.has(alias))
+}
+
+/**
  * True when the request is from an allowlisted app origin.
  *
  * Order:
- * 1. Origin header (standard CORS) — must be allowlisted
+ * 1. Origin header (standard CORS) — must be on the static allowlist
  * 2. Referer fallback (some mobile browsers omit Origin on same-origin POST)
  * 3. No Origin/Referer — allow only when Sec-Fetch-Site is `same-origin` and
- *    the request Host / X-Forwarded-Host is itself allowlisted (privacy-mode
- *    mobile browsers). Never allow cross-site or missing metadata here.
+ *    the request Host / X-Forwarded-Host is itself on the static allowlist
+ *    (privacy-mode mobile browsers). Never allow cross-site or missing metadata.
  */
 export function isAllowedAppOrigin(
   headers: OriginCheckHeaders,
-  requestUrl?: string | null,
+  _requestUrl?: string | null,
 ): boolean {
-  const allowed = allowedAppOrigins(headers, requestUrl)
+  const allowed = staticAllowedOrigins()
 
   const origin = headerValue(headers.origin)
   if (origin) {
@@ -285,6 +303,8 @@ export function googleCloudConsoleUris(publishedOrigin = PUBLISHED_APP_ORIGIN): 
     'http://localhost:5173/',
     'http://localhost:4173',
     'http://localhost:4173/',
+    'https://localhost',
+    'https://localhost/',
   ]
   return { javascriptOrigins, redirectUris }
 }
