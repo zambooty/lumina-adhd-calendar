@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite'
 import { GOOGLE_SCOPES, readGoogleEnv } from './server/googleEnv.js'
+import { readCaptureEnv } from './server/captureEnv.js'
 import { isAllowedAppOrigin } from './server/originAllowlist.js'
 
 function nodeHeaders(
@@ -251,14 +252,100 @@ function attachGoogleApi(
   })
 }
 
+/** Local Vite middleware for /api/capture/* (status, transcribe, twilio stub). */
+function attachCaptureApi(
+  middlewares: {
+    use: (fn: (
+      req: import('http').IncomingMessage,
+      res: import('http').ServerResponse,
+      next: (err?: unknown) => void,
+    ) => void) => void
+  },
+) {
+  middlewares.use(async (req, res, next) => {
+    const url = req.url?.split('?')[0] ?? ''
+    if (!url.startsWith('/api/capture/')) {
+      next()
+      return
+    }
+
+    if (url === '/api/capture/status' && req.method === 'GET') {
+      const env = readCaptureEnv()
+      res.statusCode = 200
+      res.setHeader('content-type', 'application/json')
+      res.setHeader('cache-control', 'private, no-store')
+      res.end(
+        JSON.stringify({
+          twilioConfigured: env.twilioConfigured,
+          whisperConfigured: env.whisperConfigured,
+          imapLiveConfigured: env.imapLiveConfigured,
+        }),
+      )
+      return
+    }
+
+    if (url === '/api/capture/twilio-sms' && req.method === 'POST') {
+      const env = readCaptureEnv()
+      if (!env.twilioConfigured) {
+        res.statusCode = 503
+        res.setHeader('content-type', 'application/json')
+        res.end(
+          JSON.stringify({
+            error: 'twilio_not_configured',
+            hint: 'Bind TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN, or paste SMS in the app.',
+          }),
+        )
+        return
+      }
+      res.statusCode = 200
+      res.setHeader('content-type', 'text/xml')
+      res.setHeader('cache-control', 'private, no-store')
+      res.end(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+      )
+      return
+    }
+
+    if (url === '/api/capture/transcribe' && req.method === 'POST') {
+      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
+        res.statusCode = 403
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'forbidden_origin' }))
+        return
+      }
+      const env = readCaptureEnv()
+      // Full multipart→Whisper lives on the hosted api/capture/transcribe route.
+      // Local Vite: honest status; paste transcript always works in the UI.
+      res.statusCode = env.whisperConfigured ? 501 : 503
+      res.setHeader('content-type', 'application/json')
+      res.setHeader('cache-control', 'private, no-store')
+      res.end(
+        JSON.stringify({
+          error: env.whisperConfigured
+            ? 'transcribe_use_hosted'
+            : 'whisper_not_configured',
+          hint: env.whisperConfigured
+            ? 'Whisper key is set — use the published app STT route, or paste a transcript locally.'
+            : 'Bind WHISPER_API_KEY or OPENAI_API_KEY, or paste a transcript instead.',
+        }),
+      )
+      return
+    }
+
+    next()
+  })
+}
+
 export function googleApiPlugin(): Plugin {
   return {
     name: 'lumina-google-api',
     configureServer(server) {
       attachGoogleApi(server.middlewares)
+      attachCaptureApi(server.middlewares)
     },
     configurePreviewServer(server) {
       attachGoogleApi(server.middlewares)
+      attachCaptureApi(server.middlewares)
     },
   }
 }

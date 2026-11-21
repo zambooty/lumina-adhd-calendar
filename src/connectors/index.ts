@@ -1,64 +1,54 @@
 /**
- * Source connectors. Google Calendar + Gmail are live when secrets + OAuth
- * are present; otherwise they fall back to demo mocks. Notes/Texts stay mock
- * only in demo mode — empty when Google is configured and connected.
+ * Source connectors.
+ * Google Calendar + Gmail are live when secrets + OAuth are present.
+ * Notes / IMAP / SMS / Voicemail: paste-import always; demo only when not live;
+ * optional Twilio / Whisper / IMAP-live behind secrets.
  */
 import type { EventCandidate } from '../types'
-import type { ConnectorPullResult, SourceConnector } from './types'
+import type { SourceConnector } from './types'
 import { freshPullBatch } from '../lib/seed'
 import { fetchGoogleConfig } from '../lib/googleConfig'
 import { getGoogleAccessToken } from '../lib/googleAuth'
-import {
-  delay,
-  demoNotesCandidates,
-  demoTextsCandidates,
-  SOURCE_META,
-} from './demoData'
 import { googleCalendarConnector } from './googleCalendar'
 import { gmailConnector } from './gmail'
+import { notesConnector } from './notes'
+import { imapEmailConnector } from './imapEmail'
+import { smsConnector } from './sms'
+import { voicemailConnector } from './voicemail'
 
 export type { SourceConnector, ConnectorPullResult } from './types'
+export type { CaptureProviderStatus, ImapAccountPrefs } from './types'
 export { googleCalendarConnector, googleCalendarConnectorStub } from './googleCalendar'
 export { gmailConnector, gmailConnectorStub } from './gmail'
+export { notesConnector } from './notes'
+export { imapEmailConnector } from './imapEmail'
+export { smsConnector } from './sms'
+export { voicemailConnector, transcribeVoicemailAudio } from './voicemail'
 
-export const notesConnector: SourceConnector = {
-  id: 'notes',
-  label: SOURCE_META.notes.label,
-  accent: SOURCE_META.notes.accent,
-  async listCandidates(): Promise<ConnectorPullResult> {
-    await delay(220)
-    const config = await fetchGoogleConfig()
-    const live =
-      config.configured && !config.demoMode && Boolean(getGoogleAccessToken())
-    // Keep inbox clean during live Google testing — no mock Notes.
-    if (live) return { candidates: [] }
-    return { candidates: demoNotesCandidates(), usedDemo: true }
-  },
-}
-
-export const textsConnector: SourceConnector = {
-  id: 'texts',
-  label: SOURCE_META.texts.label,
-  accent: SOURCE_META.texts.accent,
-  async listCandidates(): Promise<ConnectorPullResult> {
-    await delay(190)
-    const config = await fetchGoogleConfig()
-    const live =
-      config.configured && !config.demoMode && Boolean(getGoogleAccessToken())
-    // Keep inbox clean during live Google testing — no mock Texts.
-    if (live) return { candidates: [] }
-    return { candidates: demoTextsCandidates(), usedDemo: true }
-  },
-}
+/** @deprecated alias — prefer smsConnector */
+export const textsConnector = smsConnector
 
 export const calendarConnector = googleCalendarConnector
 export const emailConnector = gmailConnector
 
+/** All pullable connectors (Gmail + IMAP both contribute email candidates). */
 export const connectors: SourceConnector[] = [
   googleCalendarConnector,
   notesConnector,
   gmailConnector,
-  textsConnector,
+  imapEmailConnector,
+  smsConnector,
+  voicemailConnector,
+]
+
+/** Connectors shown as source chips (stable order). */
+export const sourceChips: SourceConnector[] = [
+  googleCalendarConnector,
+  gmailConnector,
+  notesConnector,
+  imapEmailConnector,
+  smsConnector,
+  voicemailConnector,
 ]
 
 export type PullMeta = {
@@ -98,7 +88,7 @@ export async function pullAllSources(): Promise<{
   )
 
   // In demo / not-connected mode, mix a rotating fresh batch so each pull
-  // feels alive. In live Google mode, skip extras so Google is the signal.
+  // feels alive. In live Google mode, skip extras so Google + imports are the signal.
   const extras = live ? [] : freshPullBatch().slice(0, 2)
   const candidates = [...fromConnectors, ...extras]
 
@@ -118,5 +108,22 @@ export async function pullAllSources(): Promise<{
       usedDemoSources,
       seriesCollapsed,
     },
+  }
+}
+
+/** Ingest helpers keyed by capture tab id. */
+export async function ingestCaptureText(
+  kind: 'notes' | 'imap' | 'sms' | 'voicemail',
+  text: string,
+): Promise<{ added: number; candidates: EventCandidate[] }> {
+  switch (kind) {
+    case 'notes':
+      return notesConnector.ingestText!(text)
+    case 'imap':
+      return imapEmailConnector.ingestText!(text)
+    case 'sms':
+      return smsConnector.ingestText!(text)
+    case 'voicemail':
+      return voicemailConnector.ingestText!(text)
   }
 }

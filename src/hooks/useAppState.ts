@@ -268,6 +268,17 @@ export function useAppState() {
     flash('Cleared · empty calendar & inbox')
   }, [flash])
 
+  const notifyCaptureImported = useCallback(
+    (added: number) => {
+      flash(
+        added === 1
+          ? '1 item queued · Pull from sources · pet XP on pull'
+          : `${added} items queued · Pull from sources · pet XP on pull`,
+      )
+    },
+    [flash],
+  )
+
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
     [state.candidates],
@@ -299,5 +310,6 @@ export function useAppState() {
     toggleAutoAdd,
     petReact,
     hardReset,
+    notifyCaptureImported,
   }
 }

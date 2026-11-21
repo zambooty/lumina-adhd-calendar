@@ -29,6 +29,7 @@ export default function App() {
     toggleAutoAdd,
     petReact,
     hardReset,
+    notifyCaptureImported,
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -63,6 +64,7 @@ export default function App() {
             onSchedule={scheduleCandidate}
             onDismiss={dismissCandidate}
             onToggleAutoAdd={toggleAutoAdd}
+            onCaptureImported={({ added }) => notifyCaptureImported(added)}
           />
         ),
       },
@@ -131,6 +133,7 @@ export default function App() {
       scheduleCandidate,
       dismissCandidate,
       toggleAutoAdd,
+      notifyCaptureImported,
       upcomingEvents,
       setEventStack,
       setDefaultStack,
