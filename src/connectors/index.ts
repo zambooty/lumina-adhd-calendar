@@ -9,6 +9,8 @@ import type { SourceConnector } from './types'
 import { freshPullBatch } from '../lib/seed'
 import { fetchGoogleConfig } from '../lib/googleConfig'
 import { getGoogleAccessToken } from '../lib/googleAuth'
+import { collectNativePullCandidates } from '../lib/nativeCapture'
+import { isAndroidNative } from '../lib/platform'
 import { googleCalendarConnector } from './googleCalendar'
 import { gmailConnector } from './gmail'
 import { notesConnector } from './notes'
@@ -61,6 +63,12 @@ export type PullMeta = {
   usedDemoSources: string[]
   /** Recurring instances collapsed inside connectors before inbox filter. */
   seriesCollapsed: number
+  /** Cap Android native capture summary (SMS / share / voicemail). */
+  native?: {
+    smsAdded: number
+    shareAdded: number
+    voicemailAdded: number
+  }
 }
 
 export async function pullAllSources(): Promise<{
@@ -71,14 +79,32 @@ export async function pullAllSources(): Promise<{
   const connected = Boolean(getGoogleAccessToken())
   const live = config.configured && !config.demoMode && connected
 
+  // Cap Android: auto-collect SMS / share / voicemail into the import queue
+  // before connectors drain it — one Pull button.
+  let nativeMeta: PullMeta['native']
+  const nativeErrors: string[] = []
+  const nativeHints: string[] = []
+  if (isAndroidNative()) {
+    const native = await collectNativePullCandidates()
+    nativeMeta = {
+      smsAdded: native.smsAdded,
+      shareAdded: native.shareAdded,
+      voicemailAdded: native.voicemailAdded,
+    }
+    nativeErrors.push(...native.errors)
+    nativeHints.push(...native.hints)
+  }
+
   const results = await Promise.all(connectors.map((c) => c.listCandidates()))
   const fromConnectors = results.flatMap((r) => r.candidates)
-  const errors = results
-    .map((r) => r.error)
-    .filter((e): e is string => Boolean(e))
-  const emptyHints = results
-    .map((r) => r.emptyHint)
-    .filter((h): h is string => Boolean(h))
+  const errors = [
+    ...results.map((r) => r.error).filter((e): e is string => Boolean(e)),
+    ...nativeErrors,
+  ]
+  const emptyHints = [
+    ...results.map((r) => r.emptyHint).filter((h): h is string => Boolean(h)),
+    ...nativeHints,
+  ]
   const usedDemoSources = connectors
     .filter((_, i) => results[i]?.usedDemo)
     .map((c) => c.label)
@@ -107,6 +133,7 @@ export async function pullAllSources(): Promise<{
       emptyHints,
       usedDemoSources,
       seriesCollapsed,
+      native: nativeMeta,
     },
   }
 }

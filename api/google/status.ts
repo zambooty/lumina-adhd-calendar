@@ -1,10 +1,14 @@
 import { GOOGLE_SCOPES, readGoogleEnv } from '../../server/googleEnv.js'
 import {
-  NO_STORE,
   clientKeyFromRequest,
   rateLimitedResponse,
 } from '../../server/googleTokenSecurity.js'
 import { takeRateLimit } from '../../server/rateLimit.js'
+import {
+  corsPreflightResponse,
+  jsonWithCors,
+  withCors,
+} from '../../server/cors.js'
 
 /**
  * GET /api/google/status — whether Google secrets are bound; returns clientId
@@ -18,18 +22,21 @@ export async function GET(request: Request): Promise<Response> {
     60_000,
   )
   if (!limit.allowed) {
-    return rateLimitedResponse(limit)
+    const limited = rateLimitedResponse(limit)
+    return new Response(limited.body, withCors(request, { status: limited.status, headers: limited.headers }))
   }
 
   const env = readGoogleEnv()
-  return Response.json(
-    {
-      configured: env.configured,
-      demoMode: env.demoMode,
-      clientId: env.clientId,
-      hasClientSecret: env.hasClientSecret,
-      scopes: GOOGLE_SCOPES,
-    },
-    { headers: NO_STORE },
-  )
+  return jsonWithCors(request, {
+    configured: env.configured,
+    demoMode: env.demoMode,
+    clientId: env.clientId,
+    hasClientSecret: env.hasClientSecret,
+    scopes: GOOGLE_SCOPES,
+  })
+}
+
+/** Cap cross-origin preflight. */
+export function OPTIONS(request: Request): Response {
+  return corsPreflightResponse(request)
 }

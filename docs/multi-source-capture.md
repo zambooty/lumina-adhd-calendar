@@ -28,4 +28,4 @@ Notes/SMS demo samples are skipped when Google is configured + connected. Import
 Pull filters via `src/lib/pullFilter.ts` (`dismissedKeys`, external/series keys, hard cap). Multi-source imports share the same dismiss memory after Pull.
 
 ## Android
-See `docs/android-native-capture.md`.
+Capacitor **Pull** auto-collects SMS (sideload `READ_SMS`), share-target notes/audio, plus Gmail/Calendar when connected. Paste/upload remains the web + fallback path. See `docs/android-native-capture.md`.

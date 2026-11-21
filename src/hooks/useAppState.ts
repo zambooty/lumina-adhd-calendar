@@ -17,12 +17,21 @@ import {
   formatSkipFeedback,
   rememberDismissed,
 } from '../lib/pullFilter'
+import {
+  cancelAllLuminaNotifications,
+  installNotificationTapHandler,
+  rescheduleAllEventNotifications,
+  scheduleEventNotifications,
+} from '../lib/localNotifications'
+import { drainShareTargetOnLaunch } from '../lib/nativeCapture'
+import { isNativeCapacitor } from '../lib/platform'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
   const [pulling, setPulling] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [pullStatus, setPullStatus] = useState<string | null>(null)
+  const [focusEventId, setFocusEventId] = useState<string | null>(null)
 
   useEffect(() => {
     saveState(state)
@@ -34,6 +43,24 @@ export function useAppState() {
     return () => clearTimeout(t)
   }, [toast])
 
+  // Cap: notification tap → highlight event; drain share-target on launch.
+  useEffect(() => {
+    if (!isNativeCapacitor()) return
+    void installNotificationTapHandler((eventId) => {
+      setFocusEventId(eventId)
+      setToast('Opened from reminder')
+    })
+    void drainShareTargetOnLaunch().then((added) => {
+      if (added > 0) {
+        setToast(
+          added === 1
+            ? 'Shared item queued · Pull to land it'
+            : `${added} shared items queued · Pull to land them`,
+        )
+      }
+    })
+  }, [])
+
   const flash = useCallback((msg: string) => setToast(msg), [])
 
   const dismissHero = useCallback(() => {
@@ -42,6 +69,8 @@ export function useAppState() {
 
   const scheduleCandidate = useCallback(
     (candidateId: string, stackId?: string) => {
+      let scheduled: CalendarEvent | null = null
+      let stacksSnap: ReminderStack[] = []
       setState((s) => {
         const cand = s.candidates.find((c) => c.id === candidateId)
         if (!cand || cand.status === 'scheduled') return s
@@ -58,6 +87,8 @@ export function useAppState() {
           reminderStackId: stackId ?? s.defaultStackId,
           createdAt: new Date().toISOString(),
         }
+        scheduled = event
+        stacksSnap = s.stacks
         return {
           ...s,
           events: [...s.events, event].sort(
@@ -73,6 +104,9 @@ export function useAppState() {
         }
       })
       flash('Scheduled · reminder stack attached')
+      if (scheduled) {
+        void scheduleEventNotifications(scheduled, stacksSnap)
+      }
     },
     [flash],
   )
@@ -103,8 +137,11 @@ export function useAppState() {
       let freshCount = 0
       const skipStats = emptySkipStats()
       skipStats.seriesCollapsed = meta.seriesCollapsed
+      const autoEvents: CalendarEvent[] = []
+      let stacksSnap: ReminderStack[] = []
 
       setState((s) => {
+        stacksSnap = s.stacks
         const { fresh, stats } = filterPulledCandidates({
           found,
           dismissedKeys: s.dismissedKeys ?? [],
@@ -122,10 +159,11 @@ export function useAppState() {
         const nextCandidates: EventCandidate[] = [...s.candidates]
         const nextEvents: CalendarEvent[] = [...s.events]
         let scheduled = 0
+        autoEvents.length = 0
 
         for (const c of fresh) {
           if (s.autoAddHighConfidence && c.confidence >= 0.9) {
-            nextEvents.push({
+            const event: CalendarEvent = {
               id: uid('evt'),
               title: c.title,
               start: c.start,
@@ -137,7 +175,9 @@ export function useAppState() {
               color: c.color,
               reminderStackId: s.defaultStackId,
               createdAt: new Date().toISOString(),
-            })
+            }
+            nextEvents.push(event)
+            autoEvents.push(event)
             nextCandidates.push({ ...c, status: 'scheduled' })
             scheduled += 1
           } else {
@@ -164,6 +204,10 @@ export function useAppState() {
         }
       })
 
+      for (const event of autoEvents) {
+        void scheduleEventNotifications(event, stacksSnap)
+      }
+
       const modeTag =
         meta.mode === 'live'
           ? 'Google live'
@@ -171,11 +215,23 @@ export function useAppState() {
             ? 'Google ready · demo pull'
             : 'Demo'
       const skipLine = formatSkipFeedback(skipStats)
+      const nativeBits: string[] = []
+      if (meta.native) {
+        if (meta.native.smsAdded)
+          nativeBits.push(`${meta.native.smsAdded} SMS`)
+        if (meta.native.shareAdded)
+          nativeBits.push(`${meta.native.shareAdded} shared`)
+        if (meta.native.voicemailAdded)
+          nativeBits.push(`${meta.native.voicemailAdded} voicemail`)
+      }
+      const nativeTag = nativeBits.length
+        ? ` · native ${nativeBits.join(' + ')}`
+        : ''
 
       if (meta.errors.length) {
         const errLine = meta.errors[0]
         setPullStatus(skipLine ? `${errLine} · ${skipLine}` : errLine)
-        flash(`${modeTag} · ${errLine}`)
+        flash(`${modeTag}${nativeTag} · ${errLine}`)
       } else if (freshCount === 0) {
         const hint =
           skipLine ??
@@ -190,19 +246,19 @@ export function useAppState() {
         setPullStatus(status)
         flash(
           skipLine
-            ? `${modeTag} · 0 new · ${skipLine}`
-            : `${modeTag} · 0 new`,
+            ? `${modeTag}${nativeTag} · 0 new · ${skipLine}`
+            : `${modeTag}${nativeTag} · 0 new`,
         )
       } else if (autoScheduled > 0) {
         const base = `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`
         setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
         flash(
-          `${modeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`,
+          `${modeTag}${nativeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`,
         )
       } else {
         const base = `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`
         setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
-        flash(`${modeTag} · ${freshCount} new · pet XP up`)
+        flash(`${modeTag}${nativeTag} · ${freshCount} new · pet XP up`)
       }
     } catch (err) {
       const message =
@@ -219,31 +275,39 @@ export function useAppState() {
   }, [])
 
   const updateStack = useCallback((stack: ReminderStack) => {
-    setState((s) => ({
-      ...s,
-      stacks: s.stacks.map((st) => (st.id === stack.id ? stack : st)),
-    }))
+    setState((s) => {
+      const next = {
+        ...s,
+        stacks: s.stacks.map((st) => (st.id === stack.id ? stack : st)),
+      }
+      void rescheduleAllEventNotifications(next.events, next.stacks)
+      return next
+    })
   }, [])
 
   const setEventStack = useCallback((eventId: string, stackId: string) => {
-    setState((s) => ({
-      ...s,
-      events: s.events.map((e) =>
+    setState((s) => {
+      const nextEvents = s.events.map((e) =>
         e.id === eventId
           ? { ...e, reminderStackId: stackId, reminderOverride: undefined }
           : e,
-      ),
-    }))
+      )
+      const event = nextEvents.find((e) => e.id === eventId)
+      if (event) void scheduleEventNotifications(event, s.stacks)
+      return { ...s, events: nextEvents }
+    })
   }, [])
 
   const setEventOverride = useCallback(
     (eventId: string, offsets: ReminderOffset[] | undefined) => {
-      setState((s) => ({
-        ...s,
-        events: s.events.map((e) =>
+      setState((s) => {
+        const nextEvents = s.events.map((e) =>
           e.id === eventId ? { ...e, reminderOverride: offsets } : e,
-        ),
-      }))
+        )
+        const event = nextEvents.find((e) => e.id === eventId)
+        if (event) void scheduleEventNotifications(event, s.stacks)
+        return { ...s, events: nextEvents }
+      })
     },
     [],
   )
@@ -264,8 +328,10 @@ export function useAppState() {
 
   const hardReset = useCallback(() => {
     clearGoogleToken()
-    const next = resetState()
-    setState(next)
+    setState((s) => {
+      void cancelAllLuminaNotifications(s.events, s.stacks)
+      return resetState()
+    })
     setPullStatus(null)
     flash('Cleared · empty calendar & inbox · Google disconnected')
   }, [flash])
@@ -280,6 +346,8 @@ export function useAppState() {
     },
     [flash],
   )
+
+  const clearFocusEvent = useCallback(() => setFocusEventId(null), [])
 
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
@@ -301,6 +369,8 @@ export function useAppState() {
     pullStatus,
     pendingCandidates,
     upcomingEvents,
+    focusEventId,
+    clearFocusEvent,
     dismissHero,
     scheduleCandidate,
     dismissCandidate,

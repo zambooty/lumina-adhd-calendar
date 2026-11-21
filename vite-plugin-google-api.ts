@@ -1,9 +1,24 @@
 import type { Plugin } from 'vite'
-import { POST as exchangePost } from './api/google/exchange.js'
-import { POST as refreshPost } from './api/google/refresh.js'
-import { GET as statusGet } from './api/google/status.js'
-import { GET as captureStatusGet } from './api/capture/status.js'
-import { POST as captureTranscribePost } from './api/capture/transcribe.js'
+import {
+  POST as exchangePost,
+  OPTIONS as exchangeOptions,
+} from './api/google/exchange.js'
+import {
+  POST as refreshPost,
+  OPTIONS as refreshOptions,
+} from './api/google/refresh.js'
+import {
+  GET as statusGet,
+  OPTIONS as statusOptions,
+} from './api/google/status.js'
+import {
+  GET as captureStatusGet,
+  OPTIONS as captureStatusOptions,
+} from './api/capture/status.js'
+import {
+  POST as captureTranscribePost,
+  OPTIONS as captureTranscribeOptions,
+} from './api/capture/transcribe.js'
 import { POST as captureTwilioSmsPost } from './api/capture/twilio-sms.js'
 
 /**
@@ -90,12 +105,24 @@ function attachGoogleApi(
     }
 
     try {
+      if (url === '/api/google/status' && req.method === 'OPTIONS') {
+        await writeResponse(res, statusOptions(await toRequest(req)))
+        return
+      }
       if (url === '/api/google/status' && req.method === 'GET') {
         await writeResponse(res, await statusGet(await toRequest(req)))
         return
       }
+      if (url === '/api/google/exchange' && req.method === 'OPTIONS') {
+        await writeResponse(res, exchangeOptions(await toRequest(req)))
+        return
+      }
       if (url === '/api/google/exchange' && req.method === 'POST') {
         await writeResponse(res, await exchangePost(await toRequest(req)))
+        return
+      }
+      if (url === '/api/google/refresh' && req.method === 'OPTIONS') {
+        await writeResponse(res, refreshOptions(await toRequest(req)))
         return
       }
       if (url === '/api/google/refresh' && req.method === 'POST') {
@@ -131,12 +158,20 @@ function attachCaptureApi(
     }
 
     try {
+      if (url === '/api/capture/status' && req.method === 'OPTIONS') {
+        await writeResponse(res, captureStatusOptions(await toRequest(req)))
+        return
+      }
       if (url === '/api/capture/status' && req.method === 'GET') {
         await writeResponse(res, await captureStatusGet(await toRequest(req)))
         return
       }
       if (url === '/api/capture/twilio-sms' && req.method === 'POST') {
         await writeResponse(res, await captureTwilioSmsPost(await toRequest(req)))
+        return
+      }
+      if (url === '/api/capture/transcribe' && req.method === 'OPTIONS') {
+        await writeResponse(res, captureTranscribeOptions(await toRequest(req)))
         return
       }
       if (url === '/api/capture/transcribe' && req.method === 'POST') {

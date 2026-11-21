@@ -285,12 +285,15 @@ export function googleCloudConsoleUris(publishedOrigin = PUBLISHED_APP_ORIGIN): 
   const published = normalizeOrigin(publishedOrigin) || PUBLISHED_APP_ORIGIN
   // Cloud Console JS origins McKale already registered (no localhost name needed
   // if only 127.0.0.1 is used — we still list both for completeness).
+  // Cap androidScheme https → WebView origin https://localhost (must be on
+  // the same OAuth Web client as the published + Vite entries).
   const javascriptOrigins = [
     published,
     'http://127.0.0.1:5173',
     'http://127.0.0.1:4173',
     'http://localhost:5173',
     'http://localhost:4173',
+    'https://localhost',
   ]
   const redirectUris = [
     published,

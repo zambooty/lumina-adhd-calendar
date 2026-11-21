@@ -95,21 +95,23 @@ Real connectors live in `src/connectors/googleCalendar.ts` and `src/connectors/g
 
 ### Exact Google Cloud Console URIs (McKale)
 
-Published app: `https://lumina-calendar-f5eb.apps.grok.bot`
+Published app: `https://lumina-calendar-f5eb.apps.grok.bot`  
+Capacitor Android WebView origin: `https://localhost` (same OAuth **Web** client — do not create a second client).
 
-McKale’s OAuth Web client already has the required published + local entries. Keep these exact strings (Google is byte-for-byte):
+McKale’s OAuth Web client already has the published + local Vite entries. **Add the Capacitor lines below** (Google is byte-for-byte):
 
-**Authorized JavaScript origins** (no trailing slash):
+**Authorized JavaScript origins** (no trailing slash) — add if missing:
 
 ```
 https://lumina-calendar-f5eb.apps.grok.bot
 http://127.0.0.1:5173
 http://127.0.0.1:4173
+https://localhost
 ```
 
 Optional extras if you use hostname local instead of `127.0.0.1`: `http://localhost:5173`, `http://localhost:4173`.
 
-**Authorized redirect URIs** (bare + trailing slash — mobile sends bare `window.location.origin`):
+**Authorized redirect URIs** (bare + trailing slash — Cap / mobile send bare `window.location.origin`):
 
 ```
 https://lumina-calendar-f5eb.apps.grok.bot
@@ -118,7 +120,15 @@ http://127.0.0.1:5173
 http://127.0.0.1:5173/
 http://127.0.0.1:4173
 http://127.0.0.1:4173/
+https://localhost
+https://localhost/
 ```
+
+**McKale must click in Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Web client:**
+
+1. Under **Authorized JavaScript origins**, add `https://localhost` (Save).
+2. Under **Authorized redirect URIs**, add `https://localhost` and `https://localhost/` (Save).
+3. Wait a minute for propagation, then on the debug APK: **Connect Google** → approve Calendar + Gmail → **Pull**.
 
 ### Server env (Google token routes)
 
@@ -153,28 +163,63 @@ Mobile notes: GIS popups often blank the page on iOS/Android browsers, so Connec
 
 Pulled / scheduled items attach the default **ADHD reminder stack**; pet XP still counts every pull + schedule.
 
-### Android OAuth origins (later — not blocking this wrap)
+### Android live API + OAuth (Capacitor)
 
-Capacitor Android uses `server.androidScheme: 'https'`, so the WebView origin is typically:
+Capacitor uses `server.androidScheme: 'https'` → WebView origin **`https://localhost`**. Bundled `dist/` has no Node backend, so the app calls the **published** host for `/api/google/*` and `/api/capture/*` (CORS reflects allowlisted Cap origins). Server allowlist already includes `https://localhost` / `capacitor://localhost`.
 
-- **`https://localhost`** (current config)
+**Connect Google on device**
 
-If you change scheme or Capacitor version, you may also need:
+1. Add Cap Console URIs above (`https://localhost` + `/`).
+2. Build/install debug APK (`npm run android:debug` or Android Studio).
+3. Grant any OS prompts; tap **Connect Google** — Cap opens Chrome Custom Tabs (`@capacitor/browser`); after consent, Android returns to LUMINA via `https://localhost` intent filter.
+4. If Custom Tabs fail, Cap falls back to in-WebView navigation (`allowNavigation` for Google hosts).
 
-- `http://localhost`
-- `capacitor://localhost`
+Escape hatch: `CAP_SERVER_URL=https://lumina-calendar-f5eb.apps.grok.bot npm run cap:sync` loads UI+API remote (OAuth uses the published origin already in Console). Default remains bundled + Cap origins so one Web client covers phone + web.
 
-Add the active origin(s) under **Authorized JavaScript origins** on the same OAuth Web client. Live Google Connect on-device also needs the `/api/google/*` backend reachable from the app (or a future Capacitor-friendly auth path). Until then, demo mode works offline inside the APK.
+### Android local notifications (reminder stacks)
+
+When an event is scheduled (manual or auto-add) with a reminder stack, Capacitor schedules **one OS notification per offset** (`@capacitor/local-notifications`). API 33+ prompts for `POST_NOTIFICATIONS`. Tap opens/focuses that event on the calendar. Web builds no-op.
+
+### Android auto-pull + share target
+
+On Cap Android, **Pull** also:
+
+1. Drains share-target text/audio queued into LUMINA  
+2. Requests **SMS** access and scans recent messages for appointment heuristics  
+3. Keeps Gmail/Calendar + paste paths  
+
+See `docs/android-native-capture.md`. **Play note:** broad `READ_SMS` may be rejected — sideload/debug path works and surfaces an honest hint if denied (never silent no-op).
+
+### Phone grants McKale will see
+
+1. **Notifications** (API 33+) — allow so reminder stacks fire  
+2. **SMS** — allow for auto-pull from inbox (or deny and use paste/share)  
+3. **Google account consent** — Calendar + Gmail readonly after Connect Google  
+
+### Build without local Android SDK
+
+```bash
+npm install
+npm run build
+npx cap sync android
+```
+
+Then open `android/` in Android Studio on a machine with the SDK and **Run**, or:
+
+```bash
+cd android && ./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## What’s in the app
 
 - **Calendar** — Upcoming events with vivid source colors and per-event reminder stack selection.
 - **Source inbox** — Google Calendar + Gmail (live when secrets + OAuth) plus **Capture import** (Notes / IMAP / SMS / Voicemail paste or upload). Mock Notes / SMS only when Google is not live. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
-- **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more).
+- **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more); **OS notifications on Android**.
 - **Companion pet (Blink)** — XP = events pulled + events scheduled.
 - **Persistence** — `localStorage` key `lumen_adhd_companion_v2` (empty start; legacy v1 wiped once). **Reset** clears to empty — does not re-inject fake appointments.
 - **PWA-ready** — `manifest.webmanifest` + theme color.
-- **Android** — Capacitor WebView shell (`android/`).
+- **Android** — Capacitor WebView shell (`android/`) with live API, Custom Tabs OAuth, local notifications, SMS + share-target capture.
 
 ## Connectors
 
@@ -182,9 +227,9 @@ Add the active origin(s) under **Authorized JavaScript origins** on the same OAu
 |-----------|--------|
 | Calendar  | **Google Calendar** (OAuth); demo only if secrets unset |
 | Email     | **Gmail** (OAuth) + **IMAP/other** paste + prefs stub |
-| Notes     | Paste / `.txt`·`.md` upload; mock only in demo mode |
-| SMS       | Paste import; Twilio webhook when secrets bound |
-| Voicemail | Transcript paste; Whisper STT when key bound |
+| Notes     | Paste / `.txt`·`.md` upload; Android share-target; mock only in demo mode |
+| SMS       | Cap Android inbox pull (`READ_SMS` sideload); paste import; Twilio when bound |
+| Voicemail | Share audio / transcript paste; Whisper STT when key + Google |
 
 Optional capture secrets (paste/upload works without them): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHISPER_API_KEY` or `OPENAI_API_KEY`, `IMAP_LIVE_ENABLED`. See `docs/multi-source-capture.md`.
 

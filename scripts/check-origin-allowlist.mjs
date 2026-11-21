@@ -167,7 +167,9 @@ assert.ok(!staticSet.has('https://evil.example'))
 
 const uris = googleCloudConsoleUris()
 assert.ok(uris.javascriptOrigins.includes(published))
+assert.ok(uris.javascriptOrigins.includes('https://localhost'))
 assert.ok(uris.redirectUris.includes(`${published}/`))
 assert.ok(uris.redirectUris.includes('https://localhost'))
+assert.ok(uris.redirectUris.includes('https://localhost/'))
 
 console.log('origin allowlist checks passed')

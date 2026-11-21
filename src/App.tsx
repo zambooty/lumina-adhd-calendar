@@ -19,6 +19,8 @@ export default function App() {
     pullStatus,
     pendingCandidates,
     upcomingEvents,
+    focusEventId,
+    clearFocusEvent,
     dismissHero,
     scheduleCandidate,
     dismissCandidate,
@@ -33,7 +35,8 @@ export default function App() {
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [focusEventId, setFocusEventId] = useState<string | null>(null)
+  const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
+  const activeFocusId = uiFocusEventId ?? focusEventId
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const openMenu = useCallback(() => setMenuOpen(true), [])
@@ -84,7 +87,7 @@ export default function App() {
             stacks={state.stacks}
             onChangeStack={setEventStack}
             onOpenEvent={(id) => {
-              setFocusEventId(id)
+              setUiFocusEventId(id)
               setMenuOpen(false)
             }}
           />
@@ -190,8 +193,11 @@ export default function App() {
           events={upcomingEvents}
           stacks={state.stacks}
           onChangeStack={setEventStack}
-          focusEventId={focusEventId}
-          onFocusConsumed={() => setFocusEventId(null)}
+          focusEventId={activeFocusId}
+          onFocusConsumed={() => {
+            setUiFocusEventId(null)
+            clearFocusEvent()
+          }}
         />
       </main>
 

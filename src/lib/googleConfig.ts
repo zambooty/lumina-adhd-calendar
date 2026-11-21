@@ -1,4 +1,5 @@
 import { GOOGLE_SCOPES } from './googleScopes'
+import { apiFetch } from './apiBase'
 
 export type GoogleRuntimeConfig = {
   configured: boolean
@@ -29,13 +30,12 @@ export async function fetchGoogleConfig(
   inflight = (async () => {
     try {
       // Prefer canonical path; fall back to host file-mapped `/route` URL if needed.
-      let res = await fetch('/api/google/status', {
-        credentials: 'same-origin',
+      // Cap Android uses absolute published API base when WebView is https://localhost.
+      let res = await apiFetch('/api/google/status', {
         headers: { accept: 'application/json' },
       })
       if (res.status === 404) {
-        res = await fetch('/api/google/status/route', {
-          credentials: 'same-origin',
+        res = await apiFetch('/api/google/status/route', {
           headers: { accept: 'application/json' },
         })
       }
