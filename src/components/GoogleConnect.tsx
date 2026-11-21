@@ -13,6 +13,7 @@ import {
   fetchGoogleConfig,
   type GoogleRuntimeConfig,
 } from '../lib/googleConfig'
+import { isNativeCapacitor } from '../lib/platform'
 
 type Props = {
   onChange?: () => void
@@ -48,6 +49,8 @@ function flashMessage(flash: string): string {
       return 'This page origin is not allowed for Google Connect.'
     case 'client_secret_missing':
       return 'Google client secret is not bound on the host.'
+    case 'browser_open_timeout':
+      return 'Could not open Google sign-in (Custom Tabs timed out). Tap Connect Google again.'
     default:
       return `Google sign-in issue (${flash}).`
   }
@@ -91,8 +94,32 @@ export function GoogleConnect({ onChange }: Props) {
     const result = await connectGoogle()
     if (result.redirectUri) setRedirectUri(result.redirectUri)
     if (result.pendingRedirect) {
-      setHint(`Redirecting to Google… (${result.redirectUri ?? getOAuthRedirectUri()})`)
-      // Stay busy — page is navigating away.
+      setHint(
+        isNativeCapacitor()
+          ? `Google sign-in opened in Chrome Custom Tabs (redirect ${result.redirectUri ?? getOAuthRedirectUri()}). Finish there — this is not the phone’s system account picker alone.`
+          : `Redirecting to Google… (${result.redirectUri ?? getOAuthRedirectUri()})`,
+      )
+      if (isNativeCapacitor()) {
+        // Cap Custom Tabs keep the WebView alive — do not leave the button stuck
+        // on “Connecting…” if the user closes the tab without finishing.
+        void (async () => {
+          try {
+            const { Browser } = await import('@capacitor/browser')
+            const handle = await Browser.addListener('browserFinished', () => {
+              setBusy(false)
+              void handle.remove()
+            })
+            window.setTimeout(() => {
+              setBusy(false)
+              void handle.remove()
+            }, 120_000)
+          } catch {
+            setBusy(false)
+          }
+        })()
+        return
+      }
+      // Web mobile redirect — page is navigating away; stay busy.
       return
     }
     setBusy(false)
@@ -107,11 +134,13 @@ export function GoogleConnect({ onChange }: Props) {
           ? 'Google access was denied.'
           : result.error === 'gis_unavailable'
             ? 'Google sign-in unavailable. Check network / popup blockers.'
-            : result.error === 'redirect_uri_mismatch'
-              ? flashMessage('redirect_uri_mismatch')
-              : result.error?.startsWith('missing_scopes:')
-                ? flashMessage(result.error)
-                : 'Could not connect to Google.',
+            : result.error === 'browser_open_timeout'
+              ? flashMessage('browser_open_timeout')
+              : result.error === 'redirect_uri_mismatch'
+                ? flashMessage('redirect_uri_mismatch')
+                : result.error?.startsWith('missing_scopes:')
+                  ? flashMessage(result.error)
+                  : 'Could not connect to Google.',
       )
       return
     }

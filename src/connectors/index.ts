@@ -8,7 +8,10 @@ import type { EventCandidate } from '../types'
 import type { SourceConnector } from './types'
 import { freshPullBatch } from '../lib/seed'
 import { fetchGoogleConfig } from '../lib/googleConfig'
-import { getGoogleAccessToken } from '../lib/googleAuth'
+import {
+  ensureGoogleAccessToken,
+  getGoogleAccessToken,
+} from '../lib/googleAuth'
 import { collectNativePullCandidates } from '../lib/nativeCapture'
 import { isAndroidNative } from '../lib/platform'
 import { googleCalendarConnector } from './googleCalendar'
@@ -76,6 +79,11 @@ export async function pullAllSources(): Promise<{
   meta: PullMeta
 }> {
   const config = await fetchGoogleConfig()
+  // Soft-refresh once here so Calendar + Gmail do not race Cap Browser.open.
+  // Never interactive — Pull must not open Custom Tabs / GIS consent UI.
+  if (config.configured && !config.demoMode && !getGoogleAccessToken()) {
+    await ensureGoogleAccessToken({ interactive: false })
+  }
   const connected = Boolean(getGoogleAccessToken())
   const live = config.configured && !config.demoMode && connected
 
@@ -97,10 +105,12 @@ export async function pullAllSources(): Promise<{
 
   const results = await Promise.all(connectors.map((c) => c.listCandidates()))
   const fromConnectors = results.flatMap((r) => r.candidates)
-  const errors = [
+  const rawErrors = [
     ...results.map((r) => r.error).filter((e): e is string => Boolean(e)),
     ...nativeErrors,
   ]
+  // Deduplicate identical “not signed in” lines from Calendar + Gmail.
+  const errors = [...new Set(rawErrors)]
   const emptyHints = [
     ...results.map((r) => r.emptyHint).filter((h): h is string => Boolean(h)),
     ...nativeHints,
