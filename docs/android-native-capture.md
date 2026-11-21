@@ -40,6 +40,8 @@ Payloads are stashed in `NativeCapturePlugin` and consumed on Pull (or cold star
 
 Methods: `getCapabilities`, `checkSmsPermission`, `requestSmsPermission`, `readRecentSms`, `consumeSharedPayload`, `getVoicemailStatus`.
 
+In-app GitHub APK updates (separate plugin): see `docs/android-in-app-updates.md` (`AppUpdate`).
+
 ## Web unchanged
 
 Paste / file upload in `CaptureImport` still works in browsers. Native paths only run when `Capacitor.getPlatform() === 'android'`.
