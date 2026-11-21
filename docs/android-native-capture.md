@@ -5,7 +5,7 @@ Web MVP already supports **paste / file upload** for Notes, IMAP email, SMS, and
 ## Shared contract
 Keep using `SourceConnector.listCandidates` + `ingestText` and the local import queue. Native plugins should call the same ingest helpers (or write into the same queue shape) so ADHD reminder stacks + pet XP stay unchanged.
 
-Fingerprints for dismiss / no-repeat: `source|normalizedTitle|startIso` (`src/lib/candidateFingerprint.ts`).
+Fingerprints for dismiss / no-repeat: `src/lib/pullFilter.ts` (`dismissedKeys` on `AppState`).
 
 ## Notes
 | Approach | Permission / API | Notes |

@@ -21,7 +21,7 @@ Status booleans only: `GET /api/capture/status`.
 Notes/SMS demo samples are skipped when Google is configured + connected. Imports and Google pulls remain.
 
 ## Dismiss / no-repeat compatibility
-Pull dedupes with `candidateFingerprint` (`source|title|start`) plus legacy `title|start`. Dismiss records fingerprints on `AppState.dismissedFingerprints` for the sibling dismiss-memory PR.
+Pull filters via `src/lib/pullFilter.ts` (`dismissedKeys`, external/series keys, hard cap). Multi-source imports share the same dismiss memory after Pull.
 
 ## Android
 See `docs/android-native-capture.md`.
