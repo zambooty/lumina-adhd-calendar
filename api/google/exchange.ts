@@ -1,11 +1,27 @@
-import { readGoogleEnv } from '../../../server/googleEnv.js'
+import { readGoogleEnv } from '../../server/googleEnv.js'
+
+function isSameOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  try {
+    return new URL(origin).origin === new URL(request.url).origin
+  } catch {
+    return false
+  }
+}
 
 /**
  * POST /api/google/exchange — optional auth-code → token exchange.
- * Body: { code: string, redirectUri: string }
- * Uses GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET when both are set.
+ * Same-origin only. Primary Connect Google flow uses GIS token client (no exchange).
  */
 export async function POST(request: Request): Promise<Response> {
+  if (!isSameOrigin(request)) {
+    return Response.json(
+      { error: 'forbidden_origin' },
+      { status: 403, headers: { 'cache-control': 'private, no-store' } },
+    )
+  }
+
   const env = readGoogleEnv()
   if (!env.configured || !env.clientId) {
     return Response.json(
@@ -68,7 +84,6 @@ export async function POST(request: Request): Promise<Response> {
       expiresIn: payload.expires_in,
       scope: payload.scope,
       tokenType: payload.token_type,
-      // Refresh tokens are sensitive — only return if present; client stores in sessionStorage.
       refreshToken: payload.refresh_token ?? null,
     },
     { headers: { 'cache-control': 'private, no-store' } },
