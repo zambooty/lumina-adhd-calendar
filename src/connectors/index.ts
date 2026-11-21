@@ -69,6 +69,8 @@ export type PullMeta = {
   errors: string[]
   emptyHints: string[]
   usedDemoSources: string[]
+  /** Recurring instances collapsed inside connectors before inbox filter. */
+  seriesCollapsed: number
 }
 
 export async function pullAllSources(): Promise<{
@@ -90,6 +92,10 @@ export async function pullAllSources(): Promise<{
   const usedDemoSources = connectors
     .filter((_, i) => results[i]?.usedDemo)
     .map((c) => c.label)
+  const seriesCollapsed = results.reduce(
+    (sum, r) => sum + (r.seriesCollapsed ?? 0),
+    0,
+  )
 
   // In demo / not-connected mode, mix a rotating fresh batch so each pull
   // feels alive. In live Google mode, skip extras so Google is the signal.
@@ -110,6 +116,7 @@ export async function pullAllSources(): Promise<{
       errors,
       emptyHints,
       usedDemoSources,
+      seriesCollapsed,
     },
   }
 }

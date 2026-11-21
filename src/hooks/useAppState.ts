@@ -9,6 +9,13 @@ import type {
 import { loadState, resetState, saveState } from '../lib/storage'
 import { pullAllSources } from '../connectors'
 import { uid } from '../lib/id'
+import {
+  dismissKeysFor,
+  emptySkipStats,
+  filterPulledCandidates,
+  formatSkipFeedback,
+  rememberDismissed,
+} from '../lib/pullFilter'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
@@ -70,13 +77,21 @@ export function useAppState() {
   )
 
   const dismissCandidate = useCallback((candidateId: string) => {
-    setState((s) => ({
-      ...s,
-      candidates: s.candidates.map((c) =>
-        c.id === candidateId ? { ...c, status: 'dismissed' as const } : c,
-      ),
-    }))
-  }, [])
+    setState((s) => {
+      const cand = s.candidates.find((c) => c.id === candidateId)
+      if (!cand) return s
+      return {
+        ...s,
+        // Drop from inbox; remember fingerprint so Pull never re-adds it.
+        candidates: s.candidates.filter((c) => c.id !== candidateId),
+        dismissedKeys: rememberDismissed(
+          s.dismissedKeys,
+          dismissKeysFor(cand),
+        ),
+      }
+    })
+    flash('Dismissed · won’t re-pull')
+  }, [flash])
 
   const pullSources = useCallback(async () => {
     setPulling(true)
@@ -85,15 +100,24 @@ export function useAppState() {
       const { candidates: found, meta } = await pullAllSources()
       let autoScheduled = 0
       let freshCount = 0
+      const skipStats = emptySkipStats()
+      skipStats.seriesCollapsed = meta.seriesCollapsed
 
       setState((s) => {
-        const existingKeys = new Set([
-          ...s.candidates.map((c) => `${c.title}|${c.start}`),
-          ...s.events.map((e) => `${e.title}|${e.start}`),
-        ])
-        const fresh = found.filter(
-          (c) => !existingKeys.has(`${c.title}|${c.start}`),
-        )
+        const { fresh, stats } = filterPulledCandidates({
+          found,
+          dismissedKeys: s.dismissedKeys ?? [],
+          existingCandidates: s.candidates,
+          existingEvents: s.events,
+        })
+        // Mutate the shared bag so StrictMode double-invokes still leave
+        // the last consistent counts for the status line below.
+        skipStats.dismissed = stats.dismissed
+        skipStats.duplicates = stats.duplicates
+        skipStats.capped = stats.capped
+        skipStats.seriesCollapsed =
+          meta.seriesCollapsed + stats.seriesCollapsed
+
         const nextCandidates: EventCandidate[] = [...s.candidates]
         const nextEvents: CalendarEvent[] = [...s.events]
         let scheduled = 0
@@ -128,6 +152,7 @@ export function useAppState() {
 
         return {
           ...s,
+          dismissedKeys: s.dismissedKeys ?? [],
           candidates: nextCandidates,
           events: nextEvents,
           pet: {
@@ -144,30 +169,38 @@ export function useAppState() {
           : meta.mode === 'mixed'
             ? 'Google ready · demo pull'
             : 'Demo'
+      const skipLine = formatSkipFeedback(skipStats)
 
       if (meta.errors.length) {
         const errLine = meta.errors[0]
-        setPullStatus(errLine)
+        setPullStatus(skipLine ? `${errLine} · ${skipLine}` : errLine)
         flash(`${modeTag} · ${errLine}`)
       } else if (freshCount === 0) {
         const hint =
+          skipLine ??
           meta.emptyHints[0] ??
           (meta.mode === 'live'
             ? 'No new items — inbox already has matches, or sources were empty.'
             : 'No new items this pull.')
-        setPullStatus(hint)
-        flash(`${modeTag} · 0 new`)
-      } else if (autoScheduled > 0) {
-        setPullStatus(
-          `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`,
+        const status =
+          skipLine && meta.emptyHints[0]
+            ? `${skipLine}. ${meta.emptyHints[0]}`
+            : hint
+        setPullStatus(status)
+        flash(
+          skipLine
+            ? `${modeTag} · 0 new · ${skipLine}`
+            : `${modeTag} · 0 new`,
         )
+      } else if (autoScheduled > 0) {
+        const base = `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`
+        setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
         flash(
           `${modeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`,
         )
       } else {
-        setPullStatus(
-          `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`,
-        )
+        const base = `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`
+        setPullStatus(skipLine ? `${base} · ${skipLine}` : base)
         flash(`${modeTag} · ${freshCount} new · pet XP up`)
       }
     } catch (err) {

@@ -161,6 +161,7 @@ async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
       confidence: Math.min(0.89, Math.max(0.55, baseConfidence)),
       status: 'pending',
       color: SOURCE_META.email.accent,
+      externalId: id,
     })
   }
   return candidates

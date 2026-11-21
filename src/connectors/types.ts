@@ -19,6 +19,8 @@ export type ConnectorPullResult = {
   usedDemo?: boolean
   /** Human-readable hint when live returned zero candidates. */
   emptyHint?: string
+  /** How many recurring/identical instances were collapsed before return. */
+  seriesCollapsed?: number
 }
 
 export type SourceConnector = {

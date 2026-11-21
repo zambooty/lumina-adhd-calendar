@@ -44,6 +44,10 @@ export type EventCandidate = {
   confidence: number
   status: CandidateStatus
   color: string
+  /** Stable id from the source (Google event id, Gmail message id, …). */
+  externalId?: string
+  /** Recurring series id when the source expands repeat instances. */
+  seriesId?: string
 }
 
 export type PetStage = 'egg' | 'hatchling' | 'cub' | 'glowfox' | 'legend'
@@ -64,6 +68,11 @@ export type AppState = {
   autoAddHighConfidence: boolean
   hasSeenHero: boolean
   seededAt: string
+  /**
+   * Fingerprints / external / series keys the user dismissed.
+   * Persisted via localStorage with the rest of app state; Pull skips them.
+   */
+  dismissedKeys: string[]
 }
 
 export type { SourceConnector, ConnectorPullResult } from './connectors/types'

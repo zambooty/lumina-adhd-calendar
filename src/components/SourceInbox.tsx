@@ -61,9 +61,11 @@ export function SourceInbox({
       {pullStatus && (
         <p
           className={`pull-status ${
-            /fail|error|expired|missing|0 new/i.test(pullStatus)
+            /fail|error|expired|missing/i.test(pullStatus)
               ? 'pull-status-warn'
-              : 'pull-status-ok'
+              : /skipped|collapsed|capped|0 new|no new/i.test(pullStatus)
+                ? 'pull-status-muted'
+                : 'pull-status-ok'
           }`}
           role="status"
         >

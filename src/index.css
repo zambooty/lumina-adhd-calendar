@@ -1469,6 +1469,12 @@ a {
   border: 1px solid rgba(255, 176, 32, 0.28);
 }
 
+.pull-status-muted {
+  color: rgba(226, 232, 240, 0.78);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
 .candidate-top {
   display: flex;
   justify-content: space-between;

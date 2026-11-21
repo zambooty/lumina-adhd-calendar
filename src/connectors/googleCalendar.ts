@@ -14,6 +14,13 @@ import {
   googleAuthHeaders,
 } from '../lib/googleApiAuth'
 import { hasCalendarScope } from '../lib/googleScopes'
+import {
+  PULL_LOOKBACK_DAYS,
+  PULL_MAX_PER_CALENDAR,
+  PULL_WINDOW_DAYS,
+  collapseRecurringCandidates,
+  candidateFingerprint,
+} from '../lib/pullFilter'
 import { delay, demoCalendarCandidates, SOURCE_META } from './demoData'
 
 type GCalEvent = {
@@ -22,6 +29,7 @@ type GCalEvent = {
   description?: string
   location?: string
   status?: string
+  recurringEventId?: string
   start?: { dateTime?: string; date?: string }
   end?: { dateTime?: string; date?: string }
   htmlLink?: string
@@ -74,6 +82,8 @@ function mapCalendarEvent(
     confidence: allDay ? 0.86 : 0.89,
     status: 'pending',
     color: SOURCE_META.calendar.accent,
+    externalId: ev.id,
+    seriesId: ev.recurringEventId,
   }
 }
 
@@ -114,14 +124,14 @@ async function listEventsForCalendar(
   calendarId: string,
   label: string,
 ): Promise<EventCandidate[]> {
-  const timeMin = subDays(new Date(), 2).toISOString()
-  const timeMax = addDays(new Date(), 60).toISOString()
+  const timeMin = subDays(new Date(), PULL_LOOKBACK_DAYS).toISOString()
+  const timeMax = addDays(new Date(), PULL_WINDOW_DAYS).toISOString()
   const params = new URLSearchParams({
     timeMin,
     timeMax,
     singleEvents: 'true',
     orderBy: 'startTime',
-    maxResults: '40',
+    maxResults: String(PULL_MAX_PER_CALENDAR),
   })
   const encoded = encodeURIComponent(calendarId)
   const res = await fetch(
@@ -143,7 +153,10 @@ async function listEventsForCalendar(
     .filter((c): c is EventCandidate => Boolean(c))
 }
 
-async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
+async function listFromGoogle(accessToken: string): Promise<{
+  candidates: EventCandidate[]
+  seriesCollapsed: number
+}> {
   const calendars = await listCalendarIds(accessToken)
   const batches = await Promise.all(
     calendars.map(async (cal) => {
@@ -159,17 +172,18 @@ async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
       }
     }),
   )
+  const flat = batches.flat()
+  const { kept, collapsed } = collapseRecurringCandidates(flat)
+  // Extra safety: fingerprint dedupe across calendars
   const seen = new Set<string>()
   const out: EventCandidate[] = []
-  for (const batch of batches) {
-    for (const c of batch) {
-      const key = `${c.title}|${c.start}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push(c)
-    }
+  for (const c of kept) {
+    const key = candidateFingerprint(c)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(c)
   }
-  return out
+  return { candidates: out, seriesCollapsed: collapsed }
 }
 
 /**
@@ -210,12 +224,13 @@ export const googleCalendarConnector: SourceConnector = {
     }
 
     try {
-      const candidates = await listFromGoogle(token)
+      const { candidates, seriesCollapsed } = await listFromGoogle(token)
       return {
         candidates,
+        seriesCollapsed,
         emptyHint:
           candidates.length === 0
-            ? 'No events in the next 60 days on your selected Google calendars.'
+            ? `No events in the next ${PULL_WINDOW_DAYS} days on your selected Google calendars.`
             : undefined,
       }
     } catch (err) {

@@ -1,5 +1,6 @@
 import type { AppState } from '../types'
 import { createEmptyState } from './seed'
+import { dismissKeysFor, rememberDismissed } from './pullFilter'
 
 /** v2 drops auto-seeded demo appointments so live Google tests start clean. */
 const KEY = 'lumen_adhd_companion_v2'
@@ -15,6 +16,20 @@ function wipeLegacyKeys(): void {
   }
 }
 
+function normalizeState(raw: AppState): AppState {
+  const fromStatus = (raw.candidates ?? [])
+    .filter((c) => c.status === 'dismissed')
+    .flatMap((c) => dismissKeysFor(c))
+
+  return {
+    ...raw,
+    dismissedKeys: rememberDismissed(
+      Array.isArray(raw.dismissedKeys) ? raw.dismissedKeys : [],
+      fromStatus,
+    ),
+  }
+}
+
 export function loadState(): AppState {
   wipeLegacyKeys()
   try {
@@ -24,7 +39,7 @@ export function loadState(): AppState {
       saveState(empty)
       return empty
     }
-    return JSON.parse(raw) as AppState
+    return normalizeState(JSON.parse(raw) as AppState)
   } catch {
     const empty = createEmptyState()
     saveState(empty)
