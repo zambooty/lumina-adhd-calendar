@@ -2,7 +2,7 @@
 
 | File | Notes |
 |------|--------|
-| [`lumina-debug.apk`](lumina-debug.apk) | Debug sideload APK (Git LFS). Built from `main` @ `b8277af`. |
+| [`lumina-debug.apk`](lumina-debug.apk) | Debug sideload APK. Built from `main` @ `b8277af`. |
 
 **Preferred download:** GitHub Release asset  
 https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21/lumina-debug.apk
