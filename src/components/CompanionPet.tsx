@@ -33,11 +33,13 @@ export function CompanionPet({ pet, onReact }: Props) {
   }
 
   return (
-    <div className="panel pet-panel">
-      <div className="panel-header">
+    <div className="panel pet-panel pet-panel--top">
+      <div className="panel-header pet-panel-header">
         <div>
-          <h2 className="panel-title">Companion</h2>
-          <p className="panel-hint">Cute menace · grows from pulls + schedules</p>
+          <h2 className="panel-title">
+            Blink <span className="pet-title-accent">· companion</span>
+          </h2>
+          <p className="panel-hint">Always here · grows from pulls + schedules</p>
         </div>
       </div>
       <div className="panel-body pet-stage">
