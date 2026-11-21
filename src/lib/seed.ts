@@ -29,6 +29,7 @@ export function createEmptyState(): AppState {
     autoAddHighConfidence: true,
     hasSeenHero: false,
     seededAt: now,
+    dismissedKeys: [],
   }
 }
 
@@ -129,6 +130,7 @@ export function createSeedState(): AppState {
     autoAddHighConfidence: true,
     hasSeenHero: false,
     seededAt: now,
+    dismissedKeys: [],
   }
 }
 
