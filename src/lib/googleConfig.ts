@@ -28,10 +28,17 @@ export async function fetchGoogleConfig(
 
   inflight = (async () => {
     try {
-      const res = await fetch('/api/google/status', {
+      // Prefer canonical path; fall back to host file-mapped `/route` URL if needed.
+      let res = await fetch('/api/google/status', {
         credentials: 'same-origin',
         headers: { accept: 'application/json' },
       })
+      if (res.status === 404) {
+        res = await fetch('/api/google/status/route', {
+          credentials: 'same-origin',
+          headers: { accept: 'application/json' },
+        })
+      }
       if (!res.ok) {
         cached = FALLBACK
         return FALLBACK
