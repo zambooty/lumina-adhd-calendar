@@ -17,8 +17,7 @@ android/local.properties
 *.apk
 *.aab
 *.ap_
-# Keep the published sideload APK under releases/ (build outputs stay ignored)
-!releases/*.apk
+# APKs stay out of the web publish package (download from GitHub Releases).
 
 # Editor directories and files
 .vscode/*

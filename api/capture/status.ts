@@ -4,6 +4,8 @@ import {
   captureStatusRateLimit,
   clientKeyFromRequest,
   rateLimitedResponse,
+  readTranscribeAllowlist,
+  whisperSpendEnabled,
 } from '../../server/captureSecurity.js'
 import {
   corsPreflightResponse,
@@ -13,8 +15,8 @@ import {
 
 /**
  * GET /api/capture/status — which optional capture providers are bound
- * (booleans only). Speech-to-text additionally requires a verified Google
- * access token on POST /transcribe (not a forgeable Origin/CSRF token).
+ * (booleans only). Speech-to-text spend requires a Whisper key + allowlist
+ * + verified Google token for an allowlisted account.
  */
 export async function GET(request: Request): Promise<Response> {
   const env = readCaptureEnv()
@@ -29,12 +31,24 @@ export async function GET(request: Request): Promise<Response> {
     )
   }
 
+  const allowlist = readTranscribeAllowlist()
+  const spendEnabled = whisperSpendEnabled(env.whisperConfigured)
+
   return jsonWithCors(request, {
     twilioConfigured: env.twilioConfigured,
-    whisperConfigured: env.whisperConfigured,
+    /** Key bound — does not mean public spend is open. */
+    whisperKeyBound: env.whisperConfigured,
+    /**
+     * Client-facing: audio upload STT is available only when key + allowlist
+     * are configured. Paste transcript always works without this.
+     */
+    whisperConfigured: spendEnabled,
+    whisperSpendEnabled: spendEnabled,
+    whisperAllowlistConfigured: allowlist.configured,
     imapLiveConfigured: env.imapLiveConfigured,
     /** Client must Connect Google; server verifies the access token. */
     sttRequiresGoogle: true,
+    sttRequiresAllowlist: true,
     googleConfigured: google.configured,
   })
 }

@@ -34,7 +34,7 @@ Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointmen
 | App ID | `com.makesoft.lumina` |
 
 Install: download on your phone and open it, or `adb install -r lumina-debug.apk`.  
-A copy also lives at [`releases/lumina-debug.apk`](releases/lumina-debug.apk) in this repo. Prefer the **Release** link above for downloads.
+Prefer the **GitHub Release** link above (the APK is not shipped inside the web app package).
 
 **Requirements on your machine**
 

@@ -10,7 +10,7 @@ import { clientKeyFromRequest, NO_STORE } from './googleTokenSecurity.js'
 export { NO_STORE, clientKeyFromRequest }
 
 /** Default Whisper upload cap (OpenAI accepts up to 25MB; we stay under). */
-export const DEFAULT_TRANSCRIBE_MAX_BYTES = 10 * 1024 * 1024
+export const DEFAULT_TRANSCRIBE_MAX_BYTES = 5 * 1024 * 1024
 
 /** Short-lived capture CSRF / nonce TTL. */
 const CAPTURE_TOKEN_TTL_MS = 5 * 60 * 1000
@@ -43,9 +43,67 @@ export function transcribeMaxBytes(): number {
   return envInt('CAPTURE_TRANSCRIBE_MAX_BYTES', DEFAULT_TRANSCRIBE_MAX_BYTES)
 }
 
-/** Transcribe: default 10 uploads / minute / client key. */
+/**
+ * Who may spend the owner's Whisper/OpenAI key.
+ * Fail-closed: empty allowlists → speech-to-text spend is disabled
+ * (paste transcript still works). Public Google sign-in alone is not enough.
+ *
+ * Env (comma / whitespace separated):
+ *   CAPTURE_TRANSCRIBE_ALLOWED_EMAILS=you@gmail.com
+ *   CAPTURE_TRANSCRIBE_ALLOWED_SUBS=google-subject-id
+ */
+export function readTranscribeAllowlist(): {
+  emails: Set<string>
+  subs: Set<string>
+  configured: boolean
+} {
+  const emails = new Set(
+    (process.env.CAPTURE_TRANSCRIBE_ALLOWED_EMAILS ?? '')
+      .split(/[,\s]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const subs = new Set(
+    (process.env.CAPTURE_TRANSCRIBE_ALLOWED_SUBS ?? '')
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  )
+  return { emails, subs, configured: emails.size > 0 || subs.size > 0 }
+}
+
+export function isTranscribeCallerAllowed(
+  sub: string | null,
+  email: string | null,
+): boolean {
+  const list = readTranscribeAllowlist()
+  if (!list.configured) return false
+  if (email && list.emails.has(email.toLowerCase())) return true
+  if (sub && list.subs.has(sub)) return true
+  return false
+}
+
+/** True when a Whisper key is bound AND an allowlist is configured. */
+export function whisperSpendEnabled(whisperKeyBound: boolean): boolean {
+  return whisperKeyBound && readTranscribeAllowlist().configured
+}
+
+/** Transcribe: default 3 uploads / minute / Google subject (not spoofable IP). */
+export function transcribeCallerRateLimit(sub: string): RateLimitResult {
+  const max = envInt('CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN', 3)
+  const key = sub.trim() || 'unknown-sub'
+  return takeRateLimit(`capture-transcribe-sub:${key}`, max, 60_000)
+}
+
+/** Global budget across all callers — default 40 / rolling day. */
+export function transcribeGlobalRateLimit(): RateLimitResult {
+  const max = envInt('CAPTURE_TRANSCRIBE_GLOBAL_PER_DAY', 40)
+  return takeRateLimit('capture-transcribe-global', max, 24 * 60 * 60 * 1000)
+}
+
+/** @deprecated Prefer transcribeCallerRateLimit(sub) — IP keys are spoofable. */
 export function transcribeRateLimit(clientKey: string): RateLimitResult {
-  const max = envInt('CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN', 10)
+  const max = envInt('CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN', 3)
   return takeRateLimit(`capture-transcribe:${clientKey}`, max, 60_000)
 }
 
