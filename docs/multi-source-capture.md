@@ -11,11 +11,15 @@ Import → local queue → **Pull from sources** → inbox → schedule (default
 ## Optional secrets (honest empty / stub when missing)
 | Secret | Effect |
 |--------|--------|
-| `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` | `/api/capture/twilio-sms` accepts webhooks |
+| `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` | `/api/capture/twilio-sms` accepts signed webhooks |
 | `WHISPER_API_KEY` or `OPENAI_API_KEY` | `/api/capture/transcribe` speech-to-text |
 | `IMAP_LIVE_ENABLED=true` | Flags IMAP live path (fetch still stubbed; paste works) |
 
-Status booleans only: `GET /api/capture/status`.
+`GET /api/capture/status` — booleans only + short-lived `captureToken` (allowlisted Origin) for STT.
+
+### Security
+- **Transcribe** — origin allowlist, one-shot capture token, 10MB cap, rate limit; `503` when key unbound; never returns key material.
+- **Twilio** — validates `X-Twilio-Signature` with auth token when configured; rejects unsigned.
 
 ## Demo-off when Google live
 Notes/SMS demo samples are skipped when Google is configured + connected. Imports and Google pulls remain.

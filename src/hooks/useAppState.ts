@@ -7,6 +7,7 @@ import type {
   ReminderStack,
 } from '../types'
 import { loadState, resetState, saveState } from '../lib/storage'
+import { clearGoogleToken } from '../lib/googleAuth'
 import { pullAllSources } from '../connectors'
 import { uid } from '../lib/id'
 import {
@@ -262,10 +263,11 @@ export function useAppState() {
   }, [])
 
   const hardReset = useCallback(() => {
+    clearGoogleToken()
     const next = resetState()
     setState(next)
     setPullStatus(null)
-    flash('Cleared · empty calendar & inbox')
+    flash('Cleared · empty calendar & inbox · Google disconnected')
   }, [flash])
 
   const notifyCaptureImported = useCallback(

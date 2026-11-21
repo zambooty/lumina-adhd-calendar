@@ -7,7 +7,7 @@ import type { ConnectorPullResult, SourceConnector } from './types'
 import { SOURCE_META } from './demoData'
 import { textToCandidates } from '../lib/textToCandidates'
 import { enqueueImports, takeImports } from '../lib/importQueue'
-import { fetchCaptureConfig } from '../lib/captureConfig'
+import { fetchCaptureConfig, takeCaptureToken } from '../lib/captureConfig'
 
 export const voicemailConnector: SourceConnector = {
   id: 'voicemail',
@@ -68,6 +68,16 @@ export async function transcribeVoicemailAudio(
     }
   }
 
+  const captureToken = await takeCaptureToken()
+  if (!captureToken) {
+    return {
+      ok: false,
+      added: 0,
+      error:
+        'Could not mint a capture token — refresh the page and retry, or paste a transcript.',
+    }
+  }
+
   const body = new FormData()
   body.append('file', file)
   body.append('filename', file.name)
@@ -77,6 +87,9 @@ export async function transcribeVoicemailAudio(
       method: 'POST',
       body,
       credentials: 'same-origin',
+      headers: {
+        'x-lumina-capture-token': captureToken,
+      },
     })
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as {
