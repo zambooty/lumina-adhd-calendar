@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LUMINA dark-only shell (matches web theme-color #05070c) -->
+    <color name="colorPrimary">#05070c</color>
+    <color name="colorPrimaryDark">#05070c</color>
+    <color name="colorAccent">#5CE1E6</color>
+</resources>

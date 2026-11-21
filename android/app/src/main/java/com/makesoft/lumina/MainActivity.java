@@ -1,0 +1,5 @@
+package com.makesoft.lumina;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}
