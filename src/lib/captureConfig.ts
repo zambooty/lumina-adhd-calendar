@@ -3,6 +3,7 @@
  * Mirrors /api/capture/status — never exposes secret values.
  */
 import type { CaptureProviderStatus } from '../connectors/types'
+import { apiFetch } from './apiBase'
 
 const FALLBACK: CaptureProviderStatus = {
   twilioConfigured: false,
@@ -34,13 +35,11 @@ export async function fetchCaptureConfig(
 
   inflight = (async () => {
     try {
-      let res = await fetch('/api/capture/status', {
-        credentials: 'same-origin',
+      let res = await apiFetch('/api/capture/status', {
         headers: { accept: 'application/json' },
       })
       if (res.status === 404) {
-        res = await fetch('/api/capture/status/route', {
-          credentials: 'same-origin',
+        res = await apiFetch('/api/capture/status/route', {
           headers: { accept: 'application/json' },
         })
       }

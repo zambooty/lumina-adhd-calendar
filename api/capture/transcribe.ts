@@ -2,12 +2,16 @@ import { readCaptureEnv, readWhisperApiKey } from '../../server/captureEnv.js'
 import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { requireGoogleAccessAuth } from '../../server/googleAccessAuth.js'
 import {
-  NO_STORE,
   clientKeyFromRequest,
   rateLimitedResponse,
   transcribeMaxBytes,
   transcribeRateLimit,
 } from '../../server/captureSecurity.js'
+import {
+  corsPreflightResponse,
+  jsonWithCors,
+  withCors,
+} from '../../server/cors.js'
 
 /**
  * POST /api/capture/transcribe — multipart audio → Whisper text.
@@ -16,24 +20,23 @@ import {
  * this app's GOOGLE_CLIENT_ID (verified via Google tokeninfo). Origin
  * allowlist + rate/size limits are defense-in-depth only — they are not
  * the sole gate. Disabled when Whisper/OpenAI key unbound; never leaks keys.
+ * CORS for Capacitor → published API.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isAllowedRequestOrigin(request)) {
-    return Response.json(
-      { error: 'forbidden_origin' },
-      { status: 403, headers: NO_STORE },
-    )
+    return jsonWithCors(request, { error: 'forbidden_origin' }, { status: 403 })
   }
 
   const env = readCaptureEnv()
   const apiKey = readWhisperApiKey()
   if (!env.whisperConfigured || !apiKey) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       {
         error: 'whisper_not_configured',
         hint: 'Bind WHISPER_API_KEY or OPENAI_API_KEY, or paste a transcript instead.',
       },
-      { status: 503, headers: NO_STORE },
+      { status: 503 },
     )
   }
 
@@ -44,7 +47,11 @@ export async function POST(request: Request): Promise<Response> {
   const clientKey = clientKeyFromRequest(request)
   const limit = transcribeRateLimit(clientKey)
   if (!limit.allowed) {
-    return rateLimitedResponse(limit)
+    const limited = rateLimitedResponse(limit)
+    return new Response(
+      limited.body,
+      withCors(request, { status: limited.status, headers: limited.headers }),
+    )
   }
 
   const maxBytes = transcribeMaxBytes()
@@ -52,10 +59,7 @@ export async function POST(request: Request): Promise<Response> {
   if (contentLength) {
     const n = Number.parseInt(contentLength, 10)
     if (Number.isFinite(n) && n > maxBytes) {
-      return Response.json(
-        { error: 'payload_too_large' },
-        { status: 413, headers: NO_STORE },
-      )
+      return jsonWithCors(request, { error: 'payload_too_large' }, { status: 413 })
     }
   }
 
@@ -63,24 +67,15 @@ export async function POST(request: Request): Promise<Response> {
   try {
     form = await request.formData()
   } catch {
-    return Response.json(
-      { error: 'invalid_multipart' },
-      { status: 400, headers: NO_STORE },
-    )
+    return jsonWithCors(request, { error: 'invalid_multipart' }, { status: 400 })
   }
 
   const file = form.get('file')
   if (!(file instanceof Blob) || file.size === 0) {
-    return Response.json(
-      { error: 'missing_file' },
-      { status: 400, headers: NO_STORE },
-    )
+    return jsonWithCors(request, { error: 'missing_file' }, { status: 400 })
   }
   if (file.size > maxBytes) {
-    return Response.json(
-      { error: 'payload_too_large' },
-      { status: 413, headers: NO_STORE },
-    )
+    return jsonWithCors(request, { error: 'payload_too_large' }, { status: 413 })
   }
 
   const filenameRaw = form.get('filename')
@@ -103,20 +98,17 @@ export async function POST(request: Request): Promise<Response> {
     })
     if (!res.ok) {
       // Never forward upstream message bodies that might echo request metadata.
-      return Response.json(
-        { error: 'whisper_failed' },
-        { status: 502, headers: NO_STORE },
-      )
+      return jsonWithCors(request, { error: 'whisper_failed' }, { status: 502 })
     }
     const payload = (await res.json()) as { text?: string }
-    return Response.json(
-      { transcript: typeof payload.text === 'string' ? payload.text : '' },
-      { headers: NO_STORE },
-    )
+    return jsonWithCors(request, {
+      transcript: typeof payload.text === 'string' ? payload.text : '',
+    })
   } catch {
-    return Response.json(
-      { error: 'whisper_failed' },
-      { status: 502, headers: NO_STORE },
-    )
+    return jsonWithCors(request, { error: 'whisper_failed' }, { status: 502 })
   }
+}
+
+export function OPTIONS(request: Request): Response {
+  return corsPreflightResponse(request)
 }

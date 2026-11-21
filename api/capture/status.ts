@@ -1,11 +1,15 @@
 import { readCaptureEnv } from '../../server/captureEnv.js'
 import { readGoogleEnv } from '../../server/googleEnv.js'
 import {
-  NO_STORE,
   captureStatusRateLimit,
   clientKeyFromRequest,
   rateLimitedResponse,
 } from '../../server/captureSecurity.js'
+import {
+  corsPreflightResponse,
+  jsonWithCors,
+  withCors,
+} from '../../server/cors.js'
 
 /**
  * GET /api/capture/status — which optional capture providers are bound
@@ -18,22 +22,23 @@ export async function GET(request: Request): Promise<Response> {
   const clientKey = clientKeyFromRequest(request)
   const limit = captureStatusRateLimit(clientKey)
   if (!limit.allowed) {
-    return rateLimitedResponse(limit)
+    const limited = rateLimitedResponse(limit)
+    return new Response(
+      limited.body,
+      withCors(request, { status: limited.status, headers: limited.headers }),
+    )
   }
 
-  return Response.json(
-    {
-      twilioConfigured: env.twilioConfigured,
-      whisperConfigured: env.whisperConfigured,
-      imapLiveConfigured: env.imapLiveConfigured,
-      /** Client must Connect Google; server verifies the access token. */
-      sttRequiresGoogle: true,
-      googleConfigured: google.configured,
-    },
-    {
-      headers: {
-        ...NO_STORE,
-      },
-    },
-  )
+  return jsonWithCors(request, {
+    twilioConfigured: env.twilioConfigured,
+    whisperConfigured: env.whisperConfigured,
+    imapLiveConfigured: env.imapLiveConfigured,
+    /** Client must Connect Google; server verifies the access token. */
+    sttRequiresGoogle: true,
+    googleConfigured: google.configured,
+  })
+}
+
+export function OPTIONS(request: Request): Response {
+  return corsPreflightResponse(request)
 }

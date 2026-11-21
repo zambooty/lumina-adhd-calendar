@@ -9,6 +9,7 @@ import { textToCandidates } from '../lib/textToCandidates'
 import { enqueueImports, takeImports } from '../lib/importQueue'
 import { fetchCaptureConfig } from '../lib/captureConfig'
 import { ensureGoogleAccessToken, isGoogleConnected } from '../lib/googleAuth'
+import { apiFetch } from '../lib/apiBase'
 
 export const voicemailConnector: SourceConnector = {
   id: 'voicemail',
@@ -85,10 +86,9 @@ export async function transcribeVoicemailAudio(
   body.append('filename', file.name)
 
   try {
-    const res = await fetch('/api/capture/transcribe', {
+    const res = await apiFetch('/api/capture/transcribe', {
       method: 'POST',
       body,
-      credentials: 'same-origin',
       headers: {
         authorization: `Bearer ${googleAccessToken}`,
       },

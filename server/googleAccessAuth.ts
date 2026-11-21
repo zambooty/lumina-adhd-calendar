@@ -7,6 +7,7 @@
 
 import { readGoogleEnv } from './googleEnv.js'
 import { NO_STORE } from './googleTokenSecurity.js'
+import { jsonWithCors } from './cors.js'
 
 export { NO_STORE }
 
@@ -122,12 +123,13 @@ export async function requireGoogleAccessAuth(
   if (!token) {
     return {
       ok: false,
-      response: Response.json(
+      response: jsonWithCors(
+        request,
         {
           error: 'google_auth_required',
           hint: 'Connect Google in LUMINA, then retry speech-to-text.',
         },
-        { status: 401, headers: NO_STORE },
+        { status: 401 },
       ),
     }
   }
@@ -142,9 +144,10 @@ export async function requireGoogleAccessAuth(
           : 'Connect Google (or reconnect) and retry.'
     return {
       ok: false,
-      response: Response.json(
+      response: jsonWithCors(
+        request,
         { error: result.error, hint },
-        { status: result.status, headers: NO_STORE },
+        { status: result.status },
       ),
     }
   }

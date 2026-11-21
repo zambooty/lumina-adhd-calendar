@@ -7,9 +7,13 @@ import {
   hydrateGoogleAuthFromRedirect,
   isGoogleConnected,
 } from './lib/googleAuth'
+import { installCapOAuthReturnListener } from './lib/capOAuthReturn'
 import { loadState, saveState } from './lib/storage'
 
 async function boot() {
+  // Cap Custom Tabs → appUrlOpen when Google redirects to https://localhost.
+  void installCapOAuthReturnListener()
+
   // Finish mobile OAuth redirect before first paint of the main shell.
   try {
     const result = await hydrateGoogleAuthFromRedirect()

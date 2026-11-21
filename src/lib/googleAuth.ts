@@ -5,6 +5,8 @@ import {
   missingGoogleScopes,
   parseScopeString,
 } from './googleScopes'
+import { apiFetch } from './apiBase'
+import { isNativeCapacitor } from './platform'
 
 const TOKEN_KEY = 'lumina_google_access_v1'
 const OAUTH_STATE_KEY = 'lumina_google_oauth_state_v1'
@@ -334,16 +336,14 @@ async function exchangeCode(
     'content-type': 'application/json',
   }
 
-  let res = await fetch('/api/google/exchange', {
+  let res = await apiFetch('/api/google/exchange', {
     method: 'POST',
-    credentials: 'same-origin',
     headers,
     body,
   })
   if (res.status === 404) {
-    res = await fetch('/api/google/exchange/route', {
+    res = await apiFetch('/api/google/exchange/route', {
       method: 'POST',
-      credentials: 'same-origin',
       headers,
       body,
     })
@@ -393,16 +393,14 @@ async function refreshWithStoredToken(): Promise<string | null> {
     accept: 'application/json',
     'content-type': 'application/json',
   }
-  let res = await fetch('/api/google/refresh', {
+  let res = await apiFetch('/api/google/refresh', {
     method: 'POST',
-    credentials: 'same-origin',
     headers,
     body,
   })
   if (res.status === 404) {
-    res = await fetch('/api/google/refresh/route', {
+    res = await apiFetch('/api/google/refresh/route', {
       method: 'POST',
-      credentials: 'same-origin',
       headers,
       body,
     })
@@ -504,11 +502,31 @@ export function consumeGoogleAuthFlash(): string | null {
   return flash
 }
 
+function buildGoogleAuthUrl(
+  clientId: string,
+  scopes: string,
+  redirectUri: string,
+  state: string,
+): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: scopes,
+    state,
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+  })
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+}
+
 /**
- * Mobile-safe redirect OAuth via Google's auth endpoint (not GIS code client).
- * Gives exact control over redirect_uri so it matches Cloud Console entries.
+ * Capacitor: open Google OAuth in Chrome Custom Tabs via @capacitor/browser.
+ * When Google redirects to https://localhost/?code=…, Android routes back into
+ * the Cap WebView (androidScheme https). Falls back to in-WebView assign.
  */
-async function connectViaRedirect(
+async function connectViaCapBrowser(
   clientId: string,
   scopes: string,
 ): Promise<{
@@ -520,20 +538,44 @@ async function connectViaRedirect(
   const redirectUri = getOAuthRedirectUri()
   sessionStorage.setItem(OAUTH_STATE_KEY, state)
   sessionStorage.setItem(REDIRECT_URI_KEY, redirectUri)
+  const authUrl = buildGoogleAuthUrl(clientId, scopes, redirectUri, state)
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: scopes,
-    state,
-    access_type: 'offline',
-    prompt: 'consent',
-    include_granted_scopes: 'true',
-  })
+  try {
+    const { Browser } = await import('@capacitor/browser')
+    await Browser.open({ url: authUrl, presentationStyle: 'popover' })
+    return { ok: false, pendingRedirect: true }
+  } catch {
+    // Plugin missing / failed — fall through to in-WebView navigation.
+    window.location.assign(authUrl)
+    return { ok: false, pendingRedirect: true }
+  }
+}
+
+/**
+ * Mobile-safe redirect OAuth via Google's auth endpoint (not GIS code client).
+ * Gives exact control over redirect_uri so it matches Cloud Console entries.
+ * On Capacitor, prefers Custom Tabs (@capacitor/browser) so GIS-in-WebView
+ * blank pages don't block Connect Google.
+ */
+async function connectViaRedirect(
+  clientId: string,
+  scopes: string,
+): Promise<{
+  ok: boolean
+  error?: string
+  pendingRedirect?: boolean
+}> {
+  if (isNativeCapacitor()) {
+    return connectViaCapBrowser(clientId, scopes)
+  }
+
+  const state = `lumina_${Math.random().toString(36).slice(2)}_${Date.now()}`
+  const redirectUri = getOAuthRedirectUri()
+  sessionStorage.setItem(OAUTH_STATE_KEY, state)
+  sessionStorage.setItem(REDIRECT_URI_KEY, redirectUri)
 
   window.location.assign(
-    `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    buildGoogleAuthUrl(clientId, scopes, redirectUri, state),
   )
   return { ok: false, pendingRedirect: true }
 }

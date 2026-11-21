@@ -1,7 +1,6 @@
 import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { readGoogleEnv } from '../../server/googleEnv.js'
 import {
-  NO_STORE,
   clientKeyFromRequest,
   exchangeRateLimit,
   isJsonContentType,
@@ -10,6 +9,11 @@ import {
   safeOAuthErrorCode,
   tokenSuccessBody,
 } from '../../server/googleTokenSecurity.js'
+import {
+  corsPreflightResponse,
+  jsonWithCors,
+  withCors,
+} from '../../server/cors.js'
 
 /**
  * POST /api/google/exchange — auth-code → token exchange.
@@ -18,39 +22,46 @@ import {
  *
  * Hardening: static origin allowlist, allowlisted redirect_uri only,
  * grant_type fixed to authorization_code, rate limit, no token leakage
- * in error bodies.
+ * in error bodies. CORS for Capacitor https://localhost → published API.
  */
 export async function POST(request: Request): Promise<Response> {
   if (!isAllowedRequestOrigin(request)) {
-    return Response.json({ error: 'forbidden_origin' }, { status: 403, headers: NO_STORE })
+    return jsonWithCors(request, { error: 'forbidden_origin' }, { status: 403 })
   }
 
   const limit = exchangeRateLimit(clientKeyFromRequest(request))
   if (!limit.allowed) {
-    return rateLimitedResponse(limit)
+    const limited = rateLimitedResponse(limit)
+    return new Response(
+      limited.body,
+      withCors(request, { status: limited.status, headers: limited.headers }),
+    )
   }
 
   if (!isJsonContentType(request)) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: 'invalid_content_type' },
-      { status: 415, headers: NO_STORE },
+      { status: 415 },
     )
   }
 
   const env = readGoogleEnv()
   if (!env.configured || !env.clientId) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: 'google_not_configured', demoMode: true },
-      { status: 503, headers: NO_STORE },
+      { status: 503 },
     )
   }
   if (!env.hasClientSecret) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       {
         error: 'client_secret_missing',
         hint: 'Token-client (GIS) flow does not need this route; bind GOOGLE_CLIENT_SECRET for code exchange.',
       },
-      { status: 503, headers: NO_STORE },
+      { status: 503 },
     )
   }
 
@@ -58,7 +69,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json()
   } catch {
-    return Response.json({ error: 'invalid_json' }, { status: 400, headers: NO_STORE })
+    return jsonWithCors(request, { error: 'invalid_json' }, { status: 400 })
   }
 
   const parsed = parseExchangeBody(raw, {
@@ -68,9 +79,10 @@ export async function POST(request: Request): Promise<Response> {
     'x-forwarded-host': request.headers.get('x-forwarded-host'),
   })
   if (!parsed.ok) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: parsed.error },
-      { status: parsed.status, headers: NO_STORE },
+      { status: parsed.status },
     )
   }
 
@@ -91,9 +103,10 @@ export async function POST(request: Request): Promise<Response> {
       body: params.toString(),
     })
   } catch {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: 'token_exchange_failed' },
-      { status: 502, headers: NO_STORE },
+      { status: 502 },
     )
   }
 
@@ -101,29 +114,36 @@ export async function POST(request: Request): Promise<Response> {
   try {
     payload = (await tokenRes.json()) as Record<string, unknown>
   } catch {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: 'token_exchange_failed' },
-      { status: 502, headers: NO_STORE },
+      { status: 502 },
     )
   }
 
   if (!tokenRes.ok) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       {
         error: 'token_exchange_failed',
         details: safeOAuthErrorCode(payload, 'upstream_error'),
       },
-      { status: 502, headers: NO_STORE },
+      { status: 502 },
     )
   }
 
   const body = tokenSuccessBody(payload, { includeRefresh: true })
   if (typeof body.accessToken !== 'string' || !body.accessToken) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: 'token_exchange_failed' },
-      { status: 502, headers: NO_STORE },
+      { status: 502 },
     )
   }
 
-  return Response.json(body, { headers: NO_STORE })
+  return jsonWithCors(request, body)
+}
+
+export function OPTIONS(request: Request): Response {
+  return corsPreflightResponse(request)
 }
