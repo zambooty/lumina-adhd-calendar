@@ -123,8 +123,8 @@ export function PullDecisionSheet({
               <section className="mix-glass pull-decision">
                 <h3 className="pull-decision-label">Inbox clear</h3>
                 <p className="pull-decision-meta">
-                  Nothing waiting. Connect Google or paste a capture, then Pull
-                  again.
+                  Nothing waiting. On Android, Allow SMS when Pull asks (or
+                  paste/share a thread). Connect Google for Calendar + Gmail.
                 </p>
               </section>
             )}

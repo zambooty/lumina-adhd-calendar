@@ -45,6 +45,7 @@ export type NativeCapturePlugin = {
   }>
   checkSmsPermission(): Promise<{ sms: string }>
   requestSmsPermission(): Promise<{ sms: string }>
+  openAppSettings(): Promise<{ ok: boolean; error?: string }>
   readRecentSms(options?: {
     max?: number
     days?: number
@@ -77,24 +78,82 @@ export function nativeCaptureAvailable(): boolean {
   return isAndroidNative()
 }
 
-/** Heuristic: message looks appointment-like enough to ingest. */
+const SMS_PERM_TIMEOUT_MS = 45_000
+const SMS_READ_TIMEOUT_MS = 12_000
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error(`${label}_timeout`)),
+      ms,
+    )
+    p.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        window.clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
+/** Capacitor may return granted / GRANTED / PermissionState.GRANTED. */
+export function normalizeSmsPermission(raw: unknown): 'granted' | 'denied' | 'prompt' {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/permissionstate\./g, '')
+    .replace(/_/g, '-')
+  if (s === 'granted' || s.endsWith('.granted')) return 'granted'
+  if (s === 'denied' || s.endsWith('.denied')) return 'denied'
+  return 'prompt'
+}
+
+/**
+ * Soft pre-filter before textToCandidates. Broader than looksAppointmentLike —
+ * include weekdays, month names, and times so we do not drop parseable SMS.
+ */
 export function looksLikeAppointment(text: string): boolean {
   const t = text.toLowerCase()
-  if (t.length < 12) return false
+  if (t.trim().length < 8) return false
   return (
-    /\b(appointment|appt|schedule[d]?|meeting|remind|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(:\d{2})?\s*(am|pm)|at\s+\d{1,2})\b/i.test(
+    /\b(appointment|appt|schedule[d]?|meeting|remind|tomorrow|tonight|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|dentist|doctor|therapy|therapist|checkup|check-up|interview|class|session|consult|booking|reservation|invite)\b/i.test(
       t,
-    ) || /\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/.test(t)
+    ) ||
+    /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(t) ||
+    /\bat\s+\d{1,2}(:\d{2})?\b/i.test(t) ||
+    /\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/.test(t) ||
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}\b/i.test(
+      t,
+    )
   )
 }
+
+export type SmsPullStatus =
+  | 'skipped_web'
+  | 'granted_added'
+  | 'granted_none'
+  | 'granted_empty_inbox'
+  | 'denied'
+  | 'timeout'
+  | 'error'
 
 export type NativePullResult = {
   smsAdded: number
   shareAdded: number
   voicemailAdded: number
+  /** How many SMS rows the inbox query returned. */
+  smsScanned: number
+  smsStatus: SmsPullStatus
   errors: string[]
   hints: string[]
 }
+
+const SMS_DENIED_HINT =
+  'SMS permission denied — allow SMS in the system prompt (or Settings → Apps → LUMINA → Permissions → SMS), or paste/share a text thread instead.'
 
 /**
  * Cap-only: request SMS if needed, read recent inbox, ingest appointment-like
@@ -105,6 +164,8 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
     smsAdded: 0,
     shareAdded: 0,
     voicemailAdded: 0,
+    smsScanned: 0,
+    smsStatus: 'skipped_web',
     errors: [],
     hints: [],
   }
@@ -115,7 +176,11 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
 
   // Share target first (user may have shared into LUMINA then tapped Pull).
   try {
-    const shared = await NativeCapture.consumeSharedPayload()
+    const shared = await withTimeout(
+      NativeCapture.consumeSharedPayload(),
+      5_000,
+      'share_consume',
+    )
     if (shared.hasPayload) {
       if (shared.text?.trim()) {
         const lower = shared.text.toLowerCase()
@@ -147,7 +212,6 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
             result.voicemailAdded += tr.added
           } else if (tr.error) {
             result.errors.push(tr.error)
-            // Fallback: if we somehow got text elsewhere, ignore; else hint.
             result.hints.push(
               tr.usedStub
                 ? 'Shared audio needs Whisper key + Google — paste a transcript instead.'
@@ -167,57 +231,129 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
     )
   }
 
-  // SMS inbox — request permission; never silent no-op.
+  // SMS inbox — request permission; never silent no-op; never hang Pull forever.
   try {
-    let perm = await NativeCapture.checkSmsPermission()
-    if (perm.sms !== 'granted') {
-      perm = await NativeCapture.requestSmsPermission()
-    }
-    if (perm.sms !== 'granted') {
-      result.hints.push(
-        'SMS permission denied — grant SMS, or paste/share a text thread. Play builds may drop READ_SMS later (Notification Listener path).',
-      )
-    } else {
-      const inbox = await NativeCapture.readRecentSms({ max: 50, days: 21 })
-      if (!inbox.ok) {
-        result.hints.push(
-          inbox.hint || inbox.error || 'Could not read SMS inbox.',
+    let permRaw = await withTimeout(
+      NativeCapture.checkSmsPermission(),
+      5_000,
+      'sms_check',
+    )
+    let perm = normalizeSmsPermission(permRaw.sms)
+    if (perm !== 'granted') {
+      try {
+        permRaw = await withTimeout(
+          NativeCapture.requestSmsPermission(),
+          SMS_PERM_TIMEOUT_MS,
+          'sms_permission',
         )
-      } else {
-        const hits = (inbox.messages || []).filter((m) =>
-          looksLikeAppointment(m.body),
-        )
-        if (!hits.length) {
+        perm = normalizeSmsPermission(permRaw.sms)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'sms_permission_failed'
+        if (msg.includes('timeout')) {
+          result.smsStatus = 'timeout'
           result.hints.push(
-            'SMS inbox scanned — no appointment-like messages in the last 21 days.',
+            'SMS permission prompt timed out — tap Pull again and Allow SMS, or paste/share a thread.',
           )
         } else {
-          // Batch into one ingest blob so textToCandidates can parse dates.
-          const blob = hits
-            .map((m) => `From ${m.address || 'SMS'}:\n${m.body}`)
-            .join('\n\n---\n\n')
-          const { added } = await ingestCaptureText('sms', blob)
-          result.smsAdded += added
-          if (added === 0) {
-            result.hints.push(
-              `Found ${hits.length} appointment-like SMS but none parsed into candidates — paste the thread for a sharper parse.`,
-            )
-          }
+          result.smsStatus = 'error'
+          result.errors.push(msg)
+          result.hints.push(SMS_DENIED_HINT)
         }
+        return await withVoicemailHint(result)
       }
     }
-  } catch (err) {
-    result.errors.push(err instanceof Error ? err.message : 'sms_pull_failed')
-    result.hints.push(
-      'Native SMS plugin unavailable — paste or share a text thread instead.',
+
+    if (perm !== 'granted') {
+      result.smsStatus = 'denied'
+      result.hints.push(SMS_DENIED_HINT)
+      return await withVoicemailHint(result)
+    }
+
+    const inbox = await withTimeout(
+      NativeCapture.readRecentSms({ max: 200, days: 30 }),
+      SMS_READ_TIMEOUT_MS,
+      'sms_read',
     )
+    if (!inbox.ok) {
+      const denied =
+        inbox.error === 'sms_permission_denied' ||
+        /permission/i.test(inbox.error || '') ||
+        /permission/i.test(inbox.hint || '')
+      result.smsStatus = denied ? 'denied' : 'error'
+      result.hints.push(
+        inbox.hint ||
+          inbox.error ||
+          (denied ? SMS_DENIED_HINT : 'Could not read SMS inbox.'),
+      )
+      return await withVoicemailHint(result)
+    }
+
+    const messages = Array.isArray(inbox.messages) ? inbox.messages : []
+    result.smsScanned = messages.length
+
+    if (!messages.length) {
+      result.smsStatus = 'granted_empty_inbox'
+      result.hints.push(
+        'SMS permission OK — inbox empty in the last 30 days. Paste or share a thread instead.',
+      )
+      return await withVoicemailHint(result)
+    }
+
+    // Per-message ingest so titles stay useful and parse can catch month-name dates.
+    let parsedHits = 0
+    for (const m of messages) {
+      const body = (m.body || '').trim()
+      if (!looksLikeAppointment(body)) continue
+      parsedHits += 1
+      const { added } = await ingestCaptureText(
+        'sms',
+        `From ${m.address || 'SMS'}:\n${body}`,
+      )
+      result.smsAdded += added
+    }
+
+    if (result.smsAdded > 0) {
+      result.smsStatus = 'granted_added'
+    } else if (parsedHits > 0) {
+      result.smsStatus = 'granted_none'
+      result.hints.push(
+        `Scanned ${messages.length} SMS · ${parsedHits} looked appointment-like but none parsed into candidates — paste the thread for a sharper parse.`,
+      )
+    } else {
+      result.smsStatus = 'granted_none'
+      result.hints.push(
+        `SMS inbox scanned (${messages.length} recent) — no appointment-like messages in the last 30 days. Paste or share a thread if you have one.`,
+      )
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'sms_pull_failed'
+    result.errors.push(msg)
+    if (msg.includes('timeout')) {
+      result.smsStatus = 'timeout'
+      result.hints.push(
+        'SMS read timed out — Pull continued without texts. Paste or share a thread, or try again.',
+      )
+    } else {
+      result.smsStatus = 'error'
+      result.hints.push(
+        'Native SMS plugin unavailable — paste or share a text thread instead.',
+      )
+    }
   }
 
-  // Honest OEM voicemail status (always documents limits).
+  return await withVoicemailHint(result)
+}
+
+async function withVoicemailHint(
+  result: NativePullResult,
+): Promise<NativePullResult> {
   try {
-    const vm = await NativeCapture.getVoicemailStatus()
+    const vm = await withTimeout(
+      NativeCapture.getVoicemailStatus(),
+      3_000,
+      'voicemail_status',
+    )
     if (!vm.oemAvailable && result.voicemailAdded === 0) {
-      // Only add hint when we didn't already get shared audio.
       if (!result.hints.some((h) => /voicemail|Whisper|audio/i.test(h))) {
         result.hints.push(vm.hint)
       }
@@ -225,7 +361,6 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
   } catch {
     /* optional */
   }
-
   return result
 }
 
@@ -233,7 +368,11 @@ export async function collectNativePullCandidates(): Promise<NativePullResult> {
 export async function drainShareTargetOnLaunch(): Promise<number> {
   if (!isAndroidNative()) return 0
   try {
-    const shared = await NativeCapture.consumeSharedPayload()
+    const shared = await withTimeout(
+      NativeCapture.consumeSharedPayload(),
+      5_000,
+      'share_launch',
+    )
     if (!shared.hasPayload) return 0
     let added = 0
     if (shared.text?.trim()) {

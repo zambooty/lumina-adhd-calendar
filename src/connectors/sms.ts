@@ -8,6 +8,7 @@ import { enqueueImports, takeImports } from '../lib/importQueue'
 import { fetchGoogleConfig } from '../lib/googleConfig'
 import { getGoogleAccessToken } from '../lib/googleAuth'
 import { fetchCaptureConfig } from '../lib/captureConfig'
+import { isAndroidNative } from '../lib/platform'
 
 async function isGoogleLive(): Promise<boolean> {
   const config = await fetchGoogleConfig()
@@ -40,8 +41,17 @@ export const smsConnector: SourceConnector = {
     if (await isGoogleLive()) {
       return {
         candidates: [],
+        emptyHint: isAndroidNative()
+          ? 'No SMS candidates this pull — Allow SMS on the system prompt, or paste/share a thread.'
+          : 'No SMS imports yet — paste a text thread, or bind Twilio secrets for webhooks.',
+      }
+    }
+    // Cap Android: never inject demo SMS — Pull should reflect real inbox / paste.
+    if (isAndroidNative()) {
+      return {
+        candidates: [],
         emptyHint:
-          'No SMS imports yet — paste a text thread, or bind Twilio secrets for webhooks.',
+          'No SMS candidates yet — Allow SMS when Pull asks, or paste/share a thread.',
       }
     }
     return { candidates: demoTextsCandidates(), usedDemo: true }

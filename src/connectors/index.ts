@@ -71,6 +71,8 @@ export type PullMeta = {
     smsAdded: number
     shareAdded: number
     voicemailAdded: number
+    smsScanned: number
+    smsStatus: string
   }
 }
 
@@ -98,6 +100,8 @@ export async function pullAllSources(): Promise<{
       smsAdded: native.smsAdded,
       shareAdded: native.shareAdded,
       voicemailAdded: native.voicemailAdded,
+      smsScanned: native.smsScanned,
+      smsStatus: native.smsStatus,
     }
     nativeErrors.push(...native.errors)
     nativeHints.push(...native.hints)
@@ -111,9 +115,10 @@ export async function pullAllSources(): Promise<{
   ]
   // Deduplicate identical “not signed in” lines from Calendar + Gmail.
   const errors = [...new Set(rawErrors)]
+  // Native SMS hints first — Google empty/error copy must not bury SMS UX.
   const emptyHints = [
-    ...results.map((r) => r.emptyHint).filter((h): h is string => Boolean(h)),
     ...nativeHints,
+    ...results.map((r) => r.emptyHint).filter((h): h is string => Boolean(h)),
   ]
   const usedDemoSources = connectors
     .filter((_, i) => results[i]?.usedDemo)
