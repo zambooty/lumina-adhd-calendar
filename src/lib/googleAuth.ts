@@ -11,12 +11,25 @@ const OAUTH_STATE_KEY = 'lumina_google_oauth_state_v1'
 const REDIRECT_URI_KEY = 'lumina_google_redirect_uri_v1'
 const AUTH_FLASH_KEY = 'lumina_google_auth_flash'
 
+/**
+ * How long a refresh token may linger in localStorage after last write.
+ * Prefer sessionStorage / in-memory for reconnect within a tab; localStorage
+ * is only a short bridge for mobile Safari OAuth redirects that wipe session.
+ * Tradeoff: after this window the user must Connect Google again.
+ */
+export const REFRESH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
 type StoredToken = {
   accessToken: string
   expiresAt: number
   scope?: string
   refreshToken?: string
+  /** Epoch ms when refreshToken was last written (localStorage retention). */
+  refreshStoredAt?: number
 }
+
+/** In-memory mirror — dies with the page; preferred over durable storage. */
+let memoryToken: StoredToken | null = null
 
 type TokenClient = {
   requestAccessToken: (overrideConfig?: {
@@ -94,79 +107,153 @@ export function recommendedRedirectUris(origin = getOAuthRedirectUri()): string[
   return [base, `${base}/`]
 }
 
-function readStored(): StoredToken | null {
+function refreshStillValid(token: StoredToken, now = Date.now()): boolean {
+  if (!token.refreshToken) return false
+  const storedAt = token.refreshStoredAt ?? 0
+  // Legacy blobs without refreshStoredAt: treat as already aged out of
+  // localStorage retention (force re-connect) but still ok in session/memory.
+  if (!storedAt) return false
+  return now - storedAt < REFRESH_TOKEN_MAX_AGE_MS
+}
+
+function parseTokenRaw(raw: string | null): StoredToken | null {
+  if (!raw) return null
   try {
-    // Prefer localStorage — sessionStorage is wiped too easily on mobile Safari
-    // after OAuth redirects / tab discards.
-    const raw =
-      localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-    if (!raw) return null
     const parsed = JSON.parse(raw) as StoredToken
-    if (!parsed.accessToken || !parsed.expiresAt) return null
-    if (Date.now() >= parsed.expiresAt - 30_000) {
-      // Keep refreshToken around for silent renewal; drop only the access token.
-      if (parsed.refreshToken) {
-        const stale: StoredToken = {
-          accessToken: '',
-          expiresAt: 0,
-          scope: parsed.scope,
-          refreshToken: parsed.refreshToken,
-        }
-        writeStoredRaw(stale)
-        return stale
-      }
-      localStorage.removeItem(TOKEN_KEY)
-      sessionStorage.removeItem(TOKEN_KEY)
-      return null
-    }
+    if (typeof parsed !== 'object' || parsed == null) return null
     return parsed
   } catch {
     return null
   }
 }
 
-function writeStoredRaw(token: StoredToken): void {
-  const raw = JSON.stringify(token)
+function readStored(): StoredToken | null {
   try {
-    localStorage.setItem(TOKEN_KEY, raw)
+    // Prefer memory → sessionStorage → short-lived localStorage refresh bridge.
+    const candidates: StoredToken[] = []
+    if (memoryToken) candidates.push(memoryToken)
+    const session = parseTokenRaw(sessionStorage.getItem(TOKEN_KEY))
+    if (session) candidates.push(session)
+    const local = parseTokenRaw(localStorage.getItem(TOKEN_KEY))
+    if (local) candidates.push(local)
+
+    let best: StoredToken | null = null
+    for (const parsed of candidates) {
+      const hasAccess =
+        Boolean(parsed.accessToken) &&
+        typeof parsed.expiresAt === 'number' &&
+        Date.now() < parsed.expiresAt - 30_000
+      const hasRefresh =
+        Boolean(parsed.refreshToken) &&
+        (parsed === memoryToken ||
+          parsed === session ||
+          refreshStillValid(parsed))
+      if (!hasAccess && !hasRefresh) continue
+      best = {
+        accessToken: hasAccess ? parsed.accessToken : '',
+        expiresAt: hasAccess ? parsed.expiresAt : 0,
+        scope: parsed.scope,
+        refreshToken: hasRefresh ? parsed.refreshToken : undefined,
+        refreshStoredAt: hasRefresh ? parsed.refreshStoredAt : undefined,
+      }
+      if (hasAccess) break
+    }
+
+    if (!best) {
+      // Drop aged localStorage refresh so it cannot linger indefinitely.
+      if (local && local.refreshToken && !refreshStillValid(local)) {
+        try {
+          localStorage.removeItem(TOKEN_KEY)
+        } catch {
+          /* ignore */
+        }
+      }
+      return null
+    }
+
+    if (!best.accessToken && best.refreshToken) {
+      writeStoredRaw(best)
+    }
+    return best
   } catch {
-    /* quota / private mode */
+    return null
   }
+}
+
+function writeStoredRaw(token: StoredToken): void {
+  const now = Date.now()
+  const withMeta: StoredToken = {
+    ...token,
+    refreshStoredAt: token.refreshToken
+      ? token.refreshStoredAt ?? now
+      : undefined,
+  }
+  memoryToken = withMeta
+
+  // Session: full token for tab lifetime (survives soft reloads).
   try {
-    sessionStorage.setItem(TOKEN_KEY, raw)
+    sessionStorage.setItem(TOKEN_KEY, JSON.stringify(withMeta))
   } catch {
     /* private mode */
+  }
+
+  // localStorage: refresh-only bridge (no durable access token). Cap retention
+  // via refreshStoredAt so a stolen blob ages out within REFRESH_TOKEN_MAX_AGE_MS.
+  try {
+    if (withMeta.refreshToken) {
+      const bridge: StoredToken = {
+        accessToken: '',
+        expiresAt: 0,
+        scope: withMeta.scope,
+        refreshToken: withMeta.refreshToken,
+        refreshStoredAt: withMeta.refreshStoredAt,
+      }
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(bridge))
+    } else {
+      localStorage.removeItem(TOKEN_KEY)
+    }
+  } catch {
+    /* quota / private mode */
   }
 }
 
 function writeStored(token: StoredToken): void {
-  const prev = (() => {
-    try {
-      const raw =
-        localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-      return raw ? (JSON.parse(raw) as StoredToken) : null
-    } catch {
-      return null
-    }
-  })()
+  const prev = memoryToken ?? parseTokenRaw(sessionStorage.getItem(TOKEN_KEY))
+  const refreshToken = token.refreshToken ?? prev?.refreshToken
   writeStoredRaw({
     ...token,
-    refreshToken: token.refreshToken ?? prev?.refreshToken,
+    refreshToken,
+    refreshStoredAt: token.refreshToken
+      ? Date.now()
+      : refreshToken
+        ? prev?.refreshStoredAt ?? Date.now()
+        : undefined,
     scope: token.scope ?? prev?.scope,
   })
 }
 
 export function clearGoogleToken(): void {
-  let existing: StoredToken | null = null
-  try {
-    const raw =
-      localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-    existing = raw ? (JSON.parse(raw) as StoredToken) : null
-  } catch {
-    existing = null
+  let existing: StoredToken | null = memoryToken
+  if (!existing) {
+    try {
+      existing =
+        parseTokenRaw(sessionStorage.getItem(TOKEN_KEY)) ??
+        parseTokenRaw(localStorage.getItem(TOKEN_KEY))
+    } catch {
+      existing = null
+    }
   }
-  localStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(TOKEN_KEY)
+  memoryToken = null
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* ignore */
+  }
   if (existing?.accessToken && window.google?.accounts?.oauth2) {
     try {
       window.google.accounts.oauth2.revoke(existing.accessToken)
@@ -183,15 +270,8 @@ export function getGoogleAccessToken(): string | null {
 }
 
 export function getGoogleGrantedScopes(): string | null {
-  try {
-    const raw =
-      localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as StoredToken
-    return typeof parsed.scope === 'string' ? parsed.scope : null
-  } catch {
-    return null
-  }
+  const stored = readStored()
+  return typeof stored?.scope === 'string' ? stored.scope : null
 }
 
 export function isGoogleConnected(): boolean {
@@ -305,15 +385,7 @@ async function exchangeCode(
 }
 
 async function refreshWithStoredToken(): Promise<string | null> {
-  let refreshToken: string | undefined
-  try {
-    const raw =
-      localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
-    if (!raw) return null
-    refreshToken = (JSON.parse(raw) as StoredToken).refreshToken
-  } catch {
-    return null
-  }
+  const refreshToken = readStored()?.refreshToken
   if (!refreshToken) return null
 
   const body = JSON.stringify({ refreshToken })

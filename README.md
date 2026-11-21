@@ -145,7 +145,9 @@ Hardening on exchange/refresh:
 - **Rate limits** — per client IP (see env above); `429` + `Retry-After` when exceeded.
 - **No token leakage** — error bodies only return safe OAuth error codes; success responses only forward expected token fields.
 
-Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens persist in `localStorage` (and mirror to `sessionStorage`).
+Scopes: `calendar.readonly` + `gmail.readonly`.
+
+**Token storage tradeoff:** access + refresh live in memory + `sessionStorage` for the tab. `localStorage` keeps only a **refresh-token bridge** (no durable access token) for ≤24h so mobile Safari OAuth redirects that wipe session can still reconnect. After that window, or on **Disconnect / Reset**, refresh is cleared and the user must Connect Google again.
 
 Mobile notes: GIS popups often blank the page on iOS/Android browsers, so Connect Google uses a redirect + `/api/google/exchange` path on coarse/narrow viewports. Pull shows honest empty/error status instead of silent demo fallback when live.
 
@@ -187,6 +189,18 @@ Add the active origin(s) under **Authorized JavaScript origins** on the same OAu
 Optional capture secrets (paste/upload works without them): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHISPER_API_KEY` or `OPENAI_API_KEY`, `IMAP_LIVE_ENABLED`. See `docs/multi-source-capture.md`.
 
 Capture API: `GET /api/capture/status`, `POST /api/capture/transcribe`, `POST /api/capture/twilio-sms`.
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `CAPTURE_TRANSCRIBE_MAX_BYTES` | `10485760` (10MB) | Multipart upload cap |
+| `CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN` | `10` | Per client IP |
+| `CAPTURE_STATUS_RATE_LIMIT_PER_MIN` | `60` | Per client IP (nonce mint) |
+| `PUBLIC_APP_ORIGIN` | published host | Also used as Twilio signature URL base |
+
+Hardening on capture routes:
+
+- **Transcribe** — static origin allowlist (no Host expansion); disabled when Whisper/OpenAI unbound; short-lived one-shot `captureToken` from origin-gated status (`X-Lumina-Capture-Token`); size + rate limits; no key/upstream leakage.
+- **Twilio SMS** — when configured, requires valid `X-Twilio-Signature` (HMAC-SHA1); unsigned requests → `403`.
 
 Native Notes / SMS / voicemail hooks for the Capacitor wrap: `docs/android-native-capture.md`.
 
