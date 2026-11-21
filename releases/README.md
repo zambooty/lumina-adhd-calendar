@@ -13,3 +13,5 @@ https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug
 | SHA-256 | `c97985b9094af8572c913f474d077d1b154673a80aec39de261e6c7fe5590628` |
 
 Rebuild locally with `npm run android:debug` (runs `android:ensure-wrapper`, then Cap sync + `assembleDebug`; APK under `android/app/build/outputs/apk/`).
+
+When publishing a new APK: bump `versionCode` in `android/app/build.gradle`, put `versionCode: N` in the GitHub Release body, update `public/android-latest.json`, and republish the web app so in-app update check sees it (`docs/android-in-app-updates.md`).

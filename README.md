@@ -239,6 +239,12 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - `allowBackup=false` plus exclude-all `backup_rules` / `data_extraction_rules` so WebView/prefs are not casually cloud-backed up or device-transferred.
 - FileProvider paths are limited to app `cache/` + `files/` (no external storage root).
 
+### In-app APK updates
+
+On Cap Android, **Menu → Check for updates** (also auto-checks occasionally) compares `versionCode` to the latest `android-debug-*` / `android-release-*` GitHub Release (via `/api/android/update`, fallback `public/android-latest.json`), then downloads and opens the system installer (`REQUEST_INSTALL_PACKAGES`).
+
+Private-repo in-app download needs a bound **`GITHUB_TOKEN`** (Contents: Read). Without it, use **Open GitHub release** on the sheet. Details: `docs/android-in-app-updates.md`.
+
 ## What’s in the app
 
 - **Calendar** — Upcoming events with vivid source colors and per-event reminder stack selection.

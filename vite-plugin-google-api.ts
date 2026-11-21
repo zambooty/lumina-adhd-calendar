@@ -20,11 +20,19 @@ import {
   OPTIONS as captureTranscribeOptions,
 } from './api/capture/transcribe.js'
 import { POST as captureTwilioSmsPost } from './api/capture/twilio-sms.js'
+import {
+  GET as androidUpdateGet,
+  OPTIONS as androidUpdateOptions,
+} from './api/android/update.js'
+import {
+  GET as androidApkGet,
+  OPTIONS as androidApkOptions,
+} from './api/android/apk.js'
 
 /**
- * Local Vite middleware mirroring Cursor host `/api/google/*` and
- * `/api/capture/*` route handlers so demo/live mode works the same in
- * `npm run dev`.
+ * Local Vite middleware mirroring Cursor host `/api/google/*`,
+ * `/api/capture/*`, and `/api/android/*` route handlers so demo/live mode
+ * works the same in `npm run dev`.
  *
  * Delegates to the same api/* handlers used in production so origin
  * allowlist, redirect_uri checks, rate limits, and error sanitization stay
@@ -190,16 +198,63 @@ function attachCaptureApi(
   })
 }
 
+function attachAndroidApi(
+  middlewares: {
+    use: (fn: (
+      req: import('http').IncomingMessage,
+      res: import('http').ServerResponse,
+      next: (err?: unknown) => void,
+    ) => void) => void
+  },
+) {
+  middlewares.use(async (req, res, next) => {
+    const url = req.url?.split('?')[0] ?? ''
+    if (!url.startsWith('/api/android/')) {
+      next()
+      return
+    }
+
+    try {
+      if (url === '/api/android/update' && req.method === 'OPTIONS') {
+        await writeResponse(res, androidUpdateOptions(await toRequest(req)))
+        return
+      }
+      if (url === '/api/android/update' && req.method === 'GET') {
+        await writeResponse(res, await androidUpdateGet(await toRequest(req)))
+        return
+      }
+      if (url === '/api/android/apk' && req.method === 'OPTIONS') {
+        await writeResponse(res, androidApkOptions(await toRequest(req)))
+        return
+      }
+      if (url === '/api/android/apk' && req.method === 'GET') {
+        await writeResponse(res, await androidApkGet(await toRequest(req)))
+        return
+      }
+    } catch {
+      res.statusCode = 500
+      res.setHeader('content-type', 'application/json')
+      res.setHeader('cache-control', 'private, no-store')
+      res.end(JSON.stringify({ error: 'internal_error' }))
+      return
+    }
+
+    next()
+  })
+}
+
 export function googleApiPlugin(): Plugin {
   return {
     name: 'lumina-google-api',
     configureServer(server) {
       attachGoogleApi(server.middlewares)
       attachCaptureApi(server.middlewares)
+      attachAndroidApi(server.middlewares)
     },
     configurePreviewServer(server) {
       attachGoogleApi(server.middlewares)
       attachCaptureApi(server.middlewares)
+      attachAndroidApi(server.middlewares)
     },
   }
 }
