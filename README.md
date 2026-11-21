@@ -265,4 +265,4 @@ Native Notes / SMS / voicemail hooks for the Capacitor wrap: `docs/android-nativ
 
 ## Design notes
 
-Dark-only atmospheric UI (no light theme). Brand **LUMINA** is the hero signal. Fonts: Syne + Outfit. Accents: cyan / lime / coral / amber on deep navy-black.
+Dark-only atmospheric UI (no light theme). Brand **LUMINA** is the hero signal. Font: Helvetica (`"Helvetica Neue", Helvetica, Arial, sans-serif`). Accents: cyan / lime / coral / amber on deep navy-black.
