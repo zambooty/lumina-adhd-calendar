@@ -53,15 +53,12 @@ Do not embed a PAT inside the APK.
 
 Play Store later would use Play in-app updates instead of this sideload flow.
 
-## After merging this feature
+## Current debug build (shipped)
 
-**Yes — rebuild and ship a new debug APK** so McKale gets the native plugin + `versionCode` 2. Then:
-
-1. Merge PR → republish web app (API + `android-latest.json`).
-2. `npm run android:debug` → upload `lumina-debug.apk` to a new `android-debug-*` Release.
-3. Put `versionCode: 2` (or higher) in the release body and update `public/android-latest.json`.
-
-Until McKale installs that first updater APK, he still updates the old way (download from GitHub / Project media).
+- Release: [`android-debug-2026-11-21-updates`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-updates)
+- `versionCode` **2** / `1.1.0-debug` — includes **AppUpdate** plugin
+- Manifest: `public/android-latest.json` (keep in sync on every publish)
+- First install of this APK (or newer) enables Menu → **Check for updates**. Older `versionCode` 1 builds still update via GitHub / Project media download.
 
 ## API
 

@@ -1,12 +1,12 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0-debug-sms",
-  "tag": "android-debug-2026-11-21-sms",
+  "versionCode": 2,
+  "versionName": "1.1.0-debug",
+  "tag": "android-debug-2026-11-21-updates",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21-sms/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-sms",
-  "sha256": "c97985b9094af8572c913f474d077d1b154673a80aec39de261e6c7fe5590628",
-  "publishedAt": "2026-11-21T15:30:32Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21-updates/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-updates",
+  "sha256": "47e35625db81dcc9a138c5ca3768283765315ae7336028ac7db02f05c78814dd",
+  "publishedAt": "2026-11-21T16:13:06Z",
   "channel": "debug",
-  "notes": "SMS Pull fix (PR #25). After merging in-app updates, bump versionCode in android/app/build.gradle, rebuild the debug APK, publish a new android-debug-* release with versionCode in the body, and update this file. Public Releases — silent download needs no GITHUB_TOKEN."
+  "notes": "In-app GitHub updates (PR #27) — versionCode 2 + AppUpdate plugin. Built from main @ 13a066e. Public Releases — silent download needs no GITHUB_TOKEN."
 }
