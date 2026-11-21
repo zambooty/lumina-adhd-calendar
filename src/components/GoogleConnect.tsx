@@ -39,6 +39,13 @@ function flashMessage(flash: string): string {
       return `Google token exchange failed. redirect_uri must be ${getOAuthRedirectUri()}`
     case 'redirect_uri_required':
       return 'Missing redirect_uri on token exchange — try Connect Google again.'
+    case 'redirect_uri_forbidden':
+    case 'redirect_uri_invalid':
+      return `redirect_uri was rejected. Use exactly: ${getOAuthRedirectUri()}`
+    case 'rate_limited':
+      return 'Too many Google sign-in attempts — wait a minute and try again.'
+    case 'forbidden_origin':
+      return 'This page origin is not allowed for Google Connect.'
     case 'client_secret_missing':
       return 'Google client secret is not bound on the host.'
     default:

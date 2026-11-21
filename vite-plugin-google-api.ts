@@ -1,19 +1,27 @@
 import type { Plugin } from 'vite'
-import { GOOGLE_SCOPES, readGoogleEnv } from './server/googleEnv.js'
-import { readCaptureEnv } from './server/captureEnv.js'
-import { isAllowedAppOrigin } from './server/originAllowlist.js'
+import { POST as exchangePost } from './api/google/exchange.js'
+import { POST as refreshPost } from './api/google/refresh.js'
+import { GET as statusGet } from './api/google/status.js'
+import { GET as captureStatusGet } from './api/capture/status.js'
+import { POST as captureTranscribePost } from './api/capture/transcribe.js'
+import { POST as captureTwilioSmsPost } from './api/capture/twilio-sms.js'
 
-function nodeHeaders(
-  req: import('http').IncomingMessage,
-): Parameters<typeof isAllowedAppOrigin>[0] {
-  return {
-    origin: req.headers.origin,
-    referer: req.headers.referer,
-    host: req.headers.host,
-    'x-forwarded-host': req.headers['x-forwarded-host'],
-    'x-forwarded-proto': req.headers['x-forwarded-proto'],
-    'sec-fetch-site': req.headers['sec-fetch-site'],
+/**
+ * Local Vite middleware mirroring Cursor host `/api/google/*` and
+ * `/api/capture/*` route handlers so demo/live mode works the same in
+ * `npm run dev`.
+ *
+ * Delegates to the same api/* handlers used in production so origin
+ * allowlist, redirect_uri checks, rate limits, and error sanitization stay
+ * in sync.
+ */
+
+async function readBody(req: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
+  return Buffer.concat(chunks)
 }
 
 function requestUrlFor(req: import('http').IncomingMessage): string {
@@ -25,16 +33,44 @@ function requestUrlFor(req: import('http').IncomingMessage): string {
   return `${proto}://${host}${req.url ?? '/'}`
 }
 
-/**
- * Local Vite middleware mirroring Cursor host `/api/google/*` route handlers
- * so demo/live mode works the same in `npm run dev`.
- */
-async function readBody(req: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+function toFetchHeaders(
+  req: import('http').IncomingMessage,
+): Headers {
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (value == null) continue
+    if (Array.isArray(value)) {
+      for (const v of value) headers.append(key, v)
+    } else {
+      headers.set(key, value)
+    }
   }
-  return Buffer.concat(chunks).toString('utf8')
+  return headers
+}
+
+async function toRequest(
+  req: import('http').IncomingMessage,
+): Promise<Request> {
+  const method = (req.method || 'GET').toUpperCase()
+  const headers = toFetchHeaders(req)
+  const url = requestUrlFor(req)
+  if (method === 'GET' || method === 'HEAD') {
+    return new Request(url, { method, headers })
+  }
+  const body = await readBody(req)
+  return new Request(url, { method, headers, body })
+}
+
+async function writeResponse(
+  res: import('http').ServerResponse,
+  response: Response,
+): Promise<void> {
+  res.statusCode = response.status
+  response.headers.forEach((value, key) => {
+    res.setHeader(key, value)
+  })
+  const buf = Buffer.from(await response.arrayBuffer())
+  res.end(buf)
 }
 
 function attachGoogleApi(
@@ -53,198 +89,24 @@ function attachGoogleApi(
       return
     }
 
-    if (url === '/api/google/status' && req.method === 'GET') {
-      const env = readGoogleEnv()
-      const body = JSON.stringify({
-        configured: env.configured,
-        demoMode: env.demoMode,
-        clientId: env.clientId,
-        hasClientSecret: env.hasClientSecret,
-        scopes: GOOGLE_SCOPES,
-      })
-      res.statusCode = 200
+    try {
+      if (url === '/api/google/status' && req.method === 'GET') {
+        await writeResponse(res, await statusGet(await toRequest(req)))
+        return
+      }
+      if (url === '/api/google/exchange' && req.method === 'POST') {
+        await writeResponse(res, await exchangePost(await toRequest(req)))
+        return
+      }
+      if (url === '/api/google/refresh' && req.method === 'POST') {
+        await writeResponse(res, await refreshPost(await toRequest(req)))
+        return
+      }
+    } catch {
+      res.statusCode = 500
       res.setHeader('content-type', 'application/json')
       res.setHeader('cache-control', 'private, no-store')
-      res.end(body)
-      return
-    }
-
-    if (url === '/api/google/exchange' && req.method === 'POST') {
-      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
-        res.statusCode = 403
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'forbidden_origin' }))
-        return
-      }
-
-      let parsed: { code?: string; redirectUri?: string } = {}
-      try {
-        parsed = JSON.parse(await readBody(req)) as {
-          code?: string
-          redirectUri?: string
-        }
-      } catch {
-        res.statusCode = 400
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'invalid_json' }))
-        return
-      }
-
-      const env = readGoogleEnv()
-      if (!env.configured || !env.clientId) {
-        res.statusCode = 503
-        res.setHeader('content-type', 'application/json')
-        res.end(
-          JSON.stringify({ error: 'google_not_configured', demoMode: true }),
-        )
-        return
-      }
-      if (!env.hasClientSecret) {
-        res.statusCode = 503
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'client_secret_missing' }))
-        return
-      }
-
-      const redirectUri = parsed.redirectUri?.trim()
-      if (!redirectUri) {
-        res.statusCode = 400
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'redirect_uri_required' }))
-        return
-      }
-
-      const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()
-      const params = new URLSearchParams({
-        code: (parsed.code ?? '').trim(),
-        client_id: env.clientId,
-        client_secret: secret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      })
-      try {
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-          },
-          body: params.toString(),
-        })
-        const payload = (await tokenRes.json()) as Record<string, unknown>
-        res.statusCode = tokenRes.ok ? 200 : 502
-        res.setHeader('content-type', 'application/json')
-        res.setHeader('cache-control', 'private, no-store')
-        if (!tokenRes.ok) {
-          res.end(
-            JSON.stringify({
-              error: 'token_exchange_failed',
-              details: payload.error ?? tokenRes.statusText,
-            }),
-          )
-          return
-        }
-        res.end(
-          JSON.stringify({
-            accessToken: payload.access_token,
-            expiresIn: payload.expires_in,
-            scope: payload.scope,
-            tokenType: payload.token_type,
-            refreshToken: payload.refresh_token ?? null,
-          }),
-        )
-      } catch (err) {
-        res.statusCode = 502
-        res.setHeader('content-type', 'application/json')
-        res.end(
-          JSON.stringify({
-            error: 'token_exchange_failed',
-            details: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
-      }
-      return
-    }
-
-    if (url === '/api/google/refresh' && req.method === 'POST') {
-      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
-        res.statusCode = 403
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'forbidden_origin' }))
-        return
-      }
-
-      let parsed: { refreshToken?: string } = {}
-      try {
-        parsed = JSON.parse(await readBody(req)) as { refreshToken?: string }
-      } catch {
-        res.statusCode = 400
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'invalid_json' }))
-        return
-      }
-
-      const env = readGoogleEnv()
-      if (!env.configured || !env.clientId || !env.hasClientSecret) {
-        res.statusCode = 503
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'google_not_configured' }))
-        return
-      }
-
-      const refreshToken = parsed.refreshToken?.trim()
-      if (!refreshToken) {
-        res.statusCode = 400
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'refresh_token_required' }))
-        return
-      }
-
-      const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()
-      const params = new URLSearchParams({
-        client_id: env.clientId,
-        client_secret: secret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      })
-      try {
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-          },
-          body: params.toString(),
-        })
-        const payload = (await tokenRes.json()) as Record<string, unknown>
-        res.statusCode = tokenRes.ok ? 200 : 502
-        res.setHeader('content-type', 'application/json')
-        res.setHeader('cache-control', 'private, no-store')
-        if (!tokenRes.ok) {
-          res.end(
-            JSON.stringify({
-              error: 'token_refresh_failed',
-              details: payload.error ?? tokenRes.statusText,
-            }),
-          )
-          return
-        }
-        res.end(
-          JSON.stringify({
-            accessToken: payload.access_token,
-            expiresIn: payload.expires_in,
-            scope: payload.scope,
-            tokenType: payload.token_type,
-          }),
-        )
-      } catch (err) {
-        res.statusCode = 502
-        res.setHeader('content-type', 'application/json')
-        res.end(
-          JSON.stringify({
-            error: 'token_refresh_failed',
-            details: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
-      }
+      res.end(JSON.stringify({ error: 'internal_error' }))
       return
     }
 
@@ -252,7 +114,6 @@ function attachGoogleApi(
   })
 }
 
-/** Local Vite middleware for /api/capture/* (status, transcribe, twilio stub). */
 function attachCaptureApi(
   middlewares: {
     use: (fn: (
@@ -269,66 +130,24 @@ function attachCaptureApi(
       return
     }
 
-    if (url === '/api/capture/status' && req.method === 'GET') {
-      const env = readCaptureEnv()
-      res.statusCode = 200
-      res.setHeader('content-type', 'application/json')
-      res.setHeader('cache-control', 'private, no-store')
-      res.end(
-        JSON.stringify({
-          twilioConfigured: env.twilioConfigured,
-          whisperConfigured: env.whisperConfigured,
-          imapLiveConfigured: env.imapLiveConfigured,
-        }),
-      )
-      return
-    }
-
-    if (url === '/api/capture/twilio-sms' && req.method === 'POST') {
-      const env = readCaptureEnv()
-      if (!env.twilioConfigured) {
-        res.statusCode = 503
-        res.setHeader('content-type', 'application/json')
-        res.end(
-          JSON.stringify({
-            error: 'twilio_not_configured',
-            hint: 'Bind TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN, or paste SMS in the app.',
-          }),
-        )
+    try {
+      if (url === '/api/capture/status' && req.method === 'GET') {
+        await writeResponse(res, await captureStatusGet(await toRequest(req)))
         return
       }
-      res.statusCode = 200
-      res.setHeader('content-type', 'text/xml')
-      res.setHeader('cache-control', 'private, no-store')
-      res.end(
-        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-      )
-      return
-    }
-
-    if (url === '/api/capture/transcribe' && req.method === 'POST') {
-      if (!isAllowedAppOrigin(nodeHeaders(req), requestUrlFor(req))) {
-        res.statusCode = 403
-        res.setHeader('content-type', 'application/json')
-        res.end(JSON.stringify({ error: 'forbidden_origin' }))
+      if (url === '/api/capture/twilio-sms' && req.method === 'POST') {
+        await writeResponse(res, await captureTwilioSmsPost(await toRequest(req)))
         return
       }
-      const env = readCaptureEnv()
-      // Full multipart→Whisper lives on the hosted api/capture/transcribe route.
-      // Local Vite: honest status; paste transcript always works in the UI.
-      res.statusCode = env.whisperConfigured ? 501 : 503
+      if (url === '/api/capture/transcribe' && req.method === 'POST') {
+        await writeResponse(res, await captureTranscribePost(await toRequest(req)))
+        return
+      }
+    } catch {
+      res.statusCode = 500
       res.setHeader('content-type', 'application/json')
       res.setHeader('cache-control', 'private, no-store')
-      res.end(
-        JSON.stringify({
-          error: env.whisperConfigured
-            ? 'transcribe_use_hosted'
-            : 'whisper_not_configured',
-          hint: env.whisperConfigured
-            ? 'Whisper key is set — use the published app STT route, or paste a transcript locally.'
-            : 'Bind WHISPER_API_KEY or OPENAI_API_KEY, or paste a transcript instead.',
-        }),
-      )
+      res.end(JSON.stringify({ error: 'internal_error' }))
       return
     }
 

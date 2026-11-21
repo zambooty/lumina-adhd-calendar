@@ -120,15 +120,30 @@ http://127.0.0.1:4173
 http://127.0.0.1:4173/
 ```
 
-Optional server env (comma-separated) if the published slug changes: `PUBLIC_APP_ORIGIN` or `ALLOWED_ORIGINS`.
+### Server env (Google token routes)
 
-Server routes (Cursor host + Vite dev middleware):
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GOOGLE_CLIENT_ID` | for live Google | OAuth Web client id (GIS + exchange) |
+| `GOOGLE_CLIENT_SECRET` | for mobile code exchange / refresh | Server-only secret; never shipped to the client |
+| `PUBLIC_APP_ORIGIN` | optional | Extra allowlisted origin if the published slug changes (e.g. `https://new-slug.apps.grok.bot`) |
+| `ALLOWED_ORIGINS` | optional | Comma-separated extra origins (same allowlist as above) |
+| `GOOGLE_EXCHANGE_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/exchange` attempts per client IP per minute (default `20`) |
+| `GOOGLE_REFRESH_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/refresh` attempts per client IP per minute (default `30`) |
 
-- `GET /api/google/status` — configured vs demo; returns client id for GIS when set
+Server routes (Cursor host + Vite dev middleware — same handlers):
+
+- `GET /api/google/status` — configured vs demo; returns client id for GIS when set (rate-limited; no secrets)
 - `POST /api/google/exchange` — auth-code → token exchange (required for mobile redirect flow)
 - `POST /api/google/refresh` — refresh_token → access_token
 
-Origin gate: `/api/google/exchange` and `/api/google/refresh` allow only the published app origin, local Vite origins, `Host` / `X-Forwarded-*` public host, and (when Origin/Referer are omitted on some mobile browsers) `Sec-Fetch-Site: same-origin` against that host. Arbitrary origins are rejected.
+Hardening on exchange/refresh:
+
+- **Static origin allowlist** — published app, local Vite, Capacitor (`https://localhost`, `capacitor://localhost`, …), plus `PUBLIC_APP_ORIGIN` / `ALLOWED_ORIGINS`. Missing/invalid Origin (and Referer) is rejected; privacy browsers may pass with `Sec-Fetch-Site: same-origin` when Host is on that same static list. Client-controlled `Host` / `X-Forwarded-*` cannot expand the Origin allowlist.
+- **`redirect_uri` allowlist** — must be an allowlisted origin (or the same with a trailing slash). Paths, query strings, and arbitrary hosts are rejected (`redirect_uri_forbidden`).
+- **Grant type** — server-fixed (`authorization_code` / `refresh_token`); client overrides other than the expected value are rejected.
+- **Rate limits** — per client IP (see env above); `429` + `Retry-After` when exceeded.
+- **No token leakage** — error bodies only return safe OAuth error codes; success responses only forward expected token fields.
 
 Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens persist in `localStorage` (and mirror to `sessionStorage`).
 
