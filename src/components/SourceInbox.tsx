@@ -15,11 +15,13 @@ type Props = {
   onToggleAutoAdd: () => void
   /** Optional toast hook after paste/upload queues items. */
   onCaptureImported?: (info: { added: number }) => void
+  /** Open fullscreen Mix Pull sheet (preferred decision surface). */
+  onOpenPullSheet?: () => void
 }
 
 /**
- * Source inbox body for the calendar-first menu shell.
- * Capture paste/upload lives here; Google connect stays in its own menu section.
+ * Source inbox — capture + settings. Decisions prefer the Mix single-sheet;
+ * first pending candidate is shown here as a compact decision card too.
  */
 export function SourceInbox({
   candidates,
@@ -31,7 +33,11 @@ export function SourceInbox({
   onDismiss,
   onToggleAutoAdd,
   onCaptureImported,
+  onOpenPullSheet,
 }: Props) {
+  const lead = candidates[0] ?? null
+  const remaining = candidates.length
+
   return (
     <div className="section-content">
       <div className="source-dots">
@@ -65,11 +71,23 @@ export function SourceInbox({
         <button
           type="button"
           className="btn btn-primary btn-sm"
-          onClick={onPull}
+          onClick={() => {
+            onPull()
+            onOpenPullSheet?.()
+          }}
           disabled={pulling}
         >
           {pulling ? 'Pulling…' : 'Pull from sources'}
         </button>
+        {remaining > 0 && onOpenPullSheet && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onOpenPullSheet}
+          >
+            Open decision sheet
+          </button>
+        )}
       </div>
 
       {pullStatus && (
@@ -87,8 +105,44 @@ export function SourceInbox({
         </p>
       )}
 
-      <AnimatePresence initial={false}>
-        {candidates.length === 0 ? (
+      <AnimatePresence initial={false} mode="wait">
+        {lead ? (
+          <motion.section
+            key={lead.id}
+            className="mix-glass pull-decision pull-decision--inbox"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            transition={{ duration: 0.22 }}
+          >
+            <h3 className="pull-decision-label">One sheet. One decision.</h3>
+            <p className="pull-decision-title">
+              {lead.title}
+              {' — '}
+              {safeFormatIso(lead.start, 'EEEE h:mm')}
+            </p>
+            <p className="pull-decision-meta">
+              From {lead.sourceLabel}
+              {' · '}
+              {Math.round(lead.confidence * 100)}% confidence
+              {remaining > 1 ? ` · ${remaining - 1} more after this` : ''}
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary pull-decision-add"
+              onClick={() => onSchedule(lead.id)}
+            >
+              Add to calendar
+            </button>
+            <button
+              type="button"
+              className="pull-decision-skip"
+              onClick={() => onDismiss(lead.id)}
+            >
+              Skip · show next
+            </button>
+          </motion.section>
+        ) : (
           <motion.p
             key="empty"
             className="empty"
@@ -99,52 +153,6 @@ export function SourceInbox({
             Inbox clear. Connect Google, paste Notes/IMAP/SMS/Voicemail above,
             then Pull — live mode skips demo fillers.
           </motion.p>
-        ) : (
-          candidates.map((c) => (
-            <motion.div
-              key={c.id}
-              className="candidate"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 24 }}
-              transition={{ duration: 0.22 }}
-            >
-              <div className="candidate-top">
-                <div>
-                  <p className="event-meta" style={{ margin: 0 }}>
-                    <span style={{ color: c.color, fontWeight: 700 }}>
-                      {c.sourceLabel}
-                    </span>
-                    {' · '}
-                    {safeFormatIso(c.start, 'EEE h:mm a')}
-                  </p>
-                  <h3 className="event-title" style={{ marginTop: 4 }}>
-                    {c.title}
-                  </h3>
-                </div>
-                <span className="conf">
-                  {Math.round(c.confidence * 100)}% match
-                </span>
-              </div>
-              <p className="snippet">{c.rawSnippet}</p>
-              <div className="candidate-actions">
-                <button
-                  type="button"
-                  className="btn btn-coral btn-sm"
-                  onClick={() => onSchedule(c.id)}
-                >
-                  Add to calendar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => onDismiss(c.id)}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </motion.div>
-          ))
         )}
       </AnimatePresence>
     </div>

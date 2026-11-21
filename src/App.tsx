@@ -1,14 +1,16 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Hero } from './components/Hero'
 import { CompanionPet } from './components/CompanionPet'
-import { CalendarView } from './components/CalendarView'
+import { MixHome } from './components/MixHome'
 import { SourceInbox } from './components/SourceInbox'
 import { ReminderStackEditor } from './components/ReminderStackEditor'
 import { GoogleConnect } from './components/GoogleConnect'
 import { BlinkHeaderPet } from './components/BlinkHeaderPet'
 import { AppMenu } from './components/AppMenu'
 import { UpcomingList } from './components/UpcomingList'
+import { PullDecisionSheet } from './components/PullDecisionSheet'
+import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { useAppState } from './hooks/useAppState'
 
 export default function App() {
@@ -36,13 +38,37 @@ export default function App() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
+  const [pullSheetOpen, setPullSheetOpen] = useState(false)
+  const [leaveMomentOpen, setLeaveMomentOpen] = useState(false)
   const activeFocusId = uiFocusEventId ?? focusEventId
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const openMenu = useCallback(() => setMenuOpen(true), [])
+  const openPullSheet = useCallback(() => {
+    setMenuOpen(false)
+    setPullSheetOpen(true)
+  }, [])
 
   const inboxCount = pendingCandidates.length
   const eventCount = upcomingEvents.length
+  const leadCandidate = pendingCandidates[0] ?? null
+
+  const leaveEvent = useMemo(() => {
+    if (!activeFocusId) return null
+    return upcomingEvents.find((e) => e.id === activeFocusId) ?? null
+  }, [activeFocusId, upcomingEvents])
+
+  // Cap notification tap → leave-now glass moment
+  useEffect(() => {
+    if (toast === 'Opened from reminder' && leaveEvent) {
+      setLeaveMomentOpen(true)
+    }
+  }, [toast, leaveEvent])
+
+  const handleTopPull = useCallback(async () => {
+    setPullSheetOpen(true)
+    await pullSources()
+  }, [pullSources])
 
   const menuSections = useMemo(
     () => [
@@ -68,6 +94,7 @@ export default function App() {
             onDismiss={dismissCandidate}
             onToggleAutoAdd={toggleAutoAdd}
             onCaptureImported={({ added }) => notifyCaptureImported(added)}
+            onOpenPullSheet={openPullSheet}
           />
         ),
       },
@@ -142,6 +169,7 @@ export default function App() {
       setDefaultStack,
       updateStack,
       petReact,
+      openPullSheet,
     ],
   )
 
@@ -150,20 +178,29 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell app-shell--calendar-first">
-      <header className="topbar topbar--calendar">
+    <div className="app-shell app-shell--calendar-first app-shell--mix">
+      <div className="mix-aurora" aria-hidden>
+        <span className="mix-aurora-orb mix-aurora-orb--cyan" />
+        <span className="mix-aurora-orb mix-aurora-orb--coral" />
+        <span className="mix-aurora-orb mix-aurora-orb--lime" />
+      </div>
+
+      <header className="topbar topbar--calendar topbar--mix">
         <div className="topbar-brand-row">
           <BlinkHeaderPet pet={state.pet} onReact={petReact} />
           <div>
             <div className="brand-mark">LUMINA</div>
-            <div className="brand-sub">ADHD Calendar Companion</div>
+            <div className="brand-sub">
+              <span className="brand-sub-full">ADHD Calendar Companion</span>
+              <span className="brand-sub-short">Companion</span>
+            </div>
           </div>
         </div>
         <div className="topbar-actions">
           <button
             type="button"
             className="btn btn-primary btn-sm topbar-pull"
-            onClick={pullSources}
+            onClick={() => void handleTopPull()}
             disabled={pulling}
           >
             {pulling ? 'Scanning…' : 'Pull'}
@@ -188,10 +225,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout layout-calendar">
-        <CalendarView
+      <main className="layout layout-calendar layout-mix">
+        <MixHome
           events={upcomingEvents}
           stacks={state.stacks}
+          pet={state.pet}
           onChangeStack={setEventStack}
           focusEventId={activeFocusId}
           onFocusConsumed={() => {
@@ -219,8 +257,34 @@ export default function App() {
         }
       />
 
+      <PullDecisionSheet
+        open={pullSheetOpen}
+        candidate={leadCandidate}
+        remaining={inboxCount}
+        pulling={pulling}
+        pullStatus={pullStatus}
+        onAdd={(id) => {
+          scheduleCandidate(id)
+        }}
+        onSkip={(id) => {
+          dismissCandidate(id)
+        }}
+        onClose={() => setPullSheetOpen(false)}
+      />
+
+      <LeaveNowMoment
+        open={leaveMomentOpen}
+        event={leaveEvent}
+        stacks={state.stacks}
+        onOpenEvent={() => {
+          if (leaveEvent) setUiFocusEventId(leaveEvent.id)
+          setLeaveMomentOpen(false)
+        }}
+        onDismiss={() => setLeaveMomentOpen(false)}
+      />
+
       <AnimatePresence>
-        {toast && (
+        {toast && toast !== 'Opened from reminder' && (
           <motion.div
             className="toast"
             role="status"
