@@ -34,31 +34,70 @@ export function xpForNextStage(xp: number): { current: number; next: number; pro
 
 export const STAGE_COPY: Record<
   PetStage,
-  { title: string; blurb: string; emoji: string }
+  { title: string; blurb: string; vibe: string }
 > = {
   egg: {
-    title: 'Glow Egg',
-    blurb: 'Warm it up by pulling appointments.',
-    emoji: '🥚',
+    title: 'Sassy Egg',
+    blurb: 'Don’t just stare. Pull something.',
+    vibe: 'Judging you gently… for now.',
   },
   hatchling: {
-    title: 'Hatchling',
-    blurb: 'Tiny paws, big calendar energy.',
-    emoji: '🐣',
+    title: 'Chaos Chick',
+    blurb: 'Big eyes. Bigger calendar opinions.',
+    vibe: 'Already side-eyeing your inbox.',
   },
   cub: {
     title: 'Neon Cub',
-    blurb: 'Scheduling makes it stronger.',
-    emoji: '🦊',
+    blurb: 'Schedule it or I will sass you.',
+    vibe: 'Bounce mode: permanently on.',
   },
   glowfox: {
-    title: 'Glowfox',
-    blurb: 'Reminder stacks? Pure rocket fuel.',
-    emoji: '✨',
+    title: 'Glowfox Diva',
+    blurb: 'Reminder stacks? Iconic. You’re welcome.',
+    vibe: 'Main-character energy unlocked.',
   },
   legend: {
-    title: 'Legend',
-    blurb: 'Time-wrangling myth. You’re crushing it.',
-    emoji: '🌟',
+    title: 'Time Legend',
+    blurb: 'You wrangled time. I look fabulous.',
+    vibe: 'Peak sparkle. Absolute menace.',
   },
+}
+
+/** Tap / hover quips — cute + sassy personality. */
+export const PET_QUIPS: Record<PetStage, string[]> = {
+  egg: [
+    'crack jokes, not plans',
+    'warm me with a pull',
+    'I’m egg-stra judgmental',
+    'hatch fees: one appointment',
+    'boop the shell, coward',
+  ],
+  hatchling: [
+    'excuse me, that was late',
+    'eyes bigger than my calendar',
+    'feed me events pls',
+    'chirp = schedule it',
+    'I saw that dismiss… rude',
+  ],
+  cub: [
+    'cute AND correct',
+    'stack those reminders, bestie',
+    'I bounce, you book',
+    'don’t test me before coffee',
+    'auto-add or suffer',
+  ],
+  glowfox: [
+    'main character energy',
+    'your inbox fears me',
+    'glow up = pull up',
+    'sass level: legendary-adjacent',
+    'I ate the chaos for lunch',
+  ],
+  legend: [
+    'time bends for us',
+    'bow to the calendar fox',
+    'XP? More like X-tra pretty',
+    'I invented leave-now',
+    'still cuter than your backlog',
+  ],
 }

@@ -384,42 +384,145 @@ a {
   pointer-events: none;
 }
 
+.pet-panel {
+  overflow: visible;
+}
+
 .pet-stage {
   position: relative;
   text-align: center;
   padding: 0.5rem 0 0.25rem;
 }
 
+.pet-stage-rail {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.pet-stage-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.pet-stage-dot.is-reached {
+  background: rgba(61, 255, 212, 0.35);
+  border-color: rgba(61, 255, 212, 0.5);
+}
+
+.pet-stage-dot.is-active {
+  background: linear-gradient(120deg, var(--cyan), var(--lime));
+  box-shadow: 0 0 12px var(--glow-cyan);
+  transform: scale(1.35);
+}
+
 .pet-avatar {
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 0.75rem;
+  position: relative;
+  width: 148px;
+  height: 148px;
+  margin: 0 auto 0.85rem;
+  padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 3.2rem;
   background:
-    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.25), transparent 40%),
-    radial-gradient(circle at 70% 70%, rgba(61, 255, 212, 0.35), transparent 50%),
-    linear-gradient(145deg, #1a2438, #0c121e);
-  border: 1px solid rgba(61, 255, 212, 0.35);
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.35), transparent 42%),
+    radial-gradient(circle at 70% 75%, rgba(255, 92, 108, 0.28), transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(61, 255, 212, 0.22), transparent 60%),
+    linear-gradient(145deg, #1f2a40, #0a101c);
+  border: 1px solid rgba(61, 255, 212, 0.45);
   box-shadow:
-    0 0 40px var(--glow-cyan),
-    inset 0 0 24px rgba(61, 255, 212, 0.12);
+    0 0 48px var(--glow-cyan),
+    0 0 80px rgba(255, 92, 108, 0.18),
+    inset 0 0 28px rgba(61, 255, 212, 0.14);
   cursor: pointer;
   user-select: none;
+  overflow: visible;
+}
+
+.pet-avatar--glowfox,
+.pet-avatar--legend {
+  border-color: rgba(200, 255, 77, 0.55);
+  box-shadow:
+    0 0 52px var(--glow-lime),
+    0 0 90px rgba(255, 176, 32, 0.22),
+    inset 0 0 30px rgba(200, 255, 77, 0.16);
+}
+
+.pet-wiggle-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px dashed rgba(200, 255, 77, 0.35);
+  animation: pet-spin 10s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes pet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.blink-svg {
+  width: 118px;
+  height: 118px;
+  display: block;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
+}
+
+.pet-quip {
+  position: absolute;
+  left: 50%;
+  top: 0.35rem;
+  transform: translateX(-50%);
+  z-index: 3;
+  max-width: 92%;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(8, 12, 20, 0.92);
+  border: 1px solid rgba(200, 255, 77, 0.45);
+  box-shadow: 0 0 24px rgba(200, 255, 77, 0.25);
+  color: var(--lime);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 .pet-name {
   font-family: var(--font-display);
   font-weight: 700;
-  margin: 0;
+  margin: 0.35rem 0 0;
+}
+
+.pet-title-accent {
+  background: linear-gradient(110deg, var(--cyan), var(--lime), var(--amber));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .pet-blurb {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.35rem 0 0.15rem;
+}
+
+.pet-vibe {
   color: var(--text-dim);
-  font-size: 0.85rem;
-  margin: 0.25rem 0 0.75rem;
+  font-size: 0.78rem;
+  margin: 0 0 0.75rem;
+  font-style: italic;
 }
 
 .xp-track {

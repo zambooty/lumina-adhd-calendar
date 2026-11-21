@@ -1,96 +1,114 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import type { PetState } from '../types'
-import { petStage, petXp, STAGE_COPY, xpForNextStage } from '../lib/pet'
+import { PET_QUIPS, petStage, petXp, STAGE_COPY, xpForNextStage } from '../lib/pet'
+import { BlinkArt } from './BlinkArt'
 
 type Props = {
   pet: PetState
   onReact: () => void
 }
 
-const REACTIONS = ['boop!', 'spark!', 'yay!', 'zoom!', 'glow!']
-
 export function CompanionPet({ pet, onReact }: Props) {
   const xp = petXp(pet)
   const stage = petStage(xp)
   const copy = STAGE_COPY[stage]
   const bar = xpForNextStage(xp)
-  const [reaction, setReaction] = useState<string | null>(null)
+  const [quip, setQuip] = useState<string | null>(null)
+  const [mood, setMood] = useState<'idle' | 'hover' | 'tap'>('idle')
 
   const stageKey = useMemo(() => stage, [stage])
+  const quips = PET_QUIPS[stage]
+
+  function pickQuip() {
+    return quips[Math.floor(Math.random() * quips.length)]
+  }
 
   function handleInteract() {
     onReact()
-    const word = REACTIONS[Math.floor(Math.random() * REACTIONS.length)]
-    setReaction(word)
-    window.setTimeout(() => setReaction(null), 900)
+    setMood('tap')
+    setQuip(pickQuip())
+    window.setTimeout(() => setMood('idle'), 450)
+    window.setTimeout(() => setQuip(null), 1600)
   }
 
   return (
-    <div className="panel">
+    <div className="panel pet-panel">
       <div className="panel-header">
         <div>
           <h2 className="panel-title">Companion</h2>
-          <p className="panel-hint">Grows from pulls + schedules</p>
+          <p className="panel-hint">Cute menace · grows from pulls + schedules</p>
         </div>
       </div>
       <div className="panel-body pet-stage">
+        <div className="pet-stage-rail" aria-hidden>
+          {(['egg', 'hatchling', 'cub', 'glowfox', 'legend'] as const).map((s, i) => {
+            const order = ['egg', 'hatchling', 'cub', 'glowfox', 'legend'] as const
+            const reached = order.indexOf(stage) >= i
+            return (
+              <span
+                key={s}
+                className={`pet-stage-dot${s === stage ? ' is-active' : ''}${reached ? ' is-reached' : ''}`}
+                title={STAGE_COPY[s].title}
+              />
+            )
+          })}
+        </div>
+
         <motion.button
           type="button"
-          className="pet-avatar"
-          aria-label={`${pet.name} the ${copy.title}. Tap to interact.`}
+          className={`pet-avatar pet-avatar--${stage}`}
+          aria-label={`${pet.name} the ${copy.title}. Tap for sass.`}
           onClick={handleInteract}
-          onHoverStart={() => setReaction('…')}
-          onHoverEnd={() => setReaction(null)}
-          animate={{
-            y: [0, -6, 0],
-            boxShadow: [
-              '0 0 28px rgba(61,255,212,0.35)',
-              '0 0 48px rgba(200,255,77,0.45)',
-              '0 0 28px rgba(61,255,212,0.35)',
-            ],
+          onHoverStart={() => {
+            setMood('hover')
+            setQuip(pickQuip())
           }}
-          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-          whileTap={{ scale: 0.9, rotate: -8 }}
-          whileHover={{ scale: 1.05 }}
+          onHoverEnd={() => {
+            setMood('idle')
+            setQuip(null)
+          }}
+          animate={
+            mood === 'tap'
+              ? { y: [0, -18, 0], rotate: [0, -12, 10, -4, 0], scale: [1, 1.08, 0.95, 1] }
+              : {
+                  y: [0, -10, 0],
+                  rotate: [0, -3, 3, 0],
+                  scale: [1, 1.03, 1],
+                }
+          }
+          transition={
+            mood === 'tap'
+              ? { duration: 0.55, ease: 'easeOut' }
+              : { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }
+          }
+          whileHover={{ scale: 1.06 }}
           key={stageKey}
         >
-          <motion.span
-            key={copy.emoji}
-            initial={{ scale: 0.4, rotate: -20, opacity: 0 }}
-            animate={{ scale: 1, rotate: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 14 }}
-          >
-            {copy.emoji}
-          </motion.span>
+          <span className="pet-wiggle-ring" aria-hidden />
+          <BlinkArt stage={stage} mood={mood} />
         </motion.button>
 
         <AnimatePresence>
-          {reaction && (
+          {quip && (
             <motion.div
-              key={reaction}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: -4 }}
-              exit={{ opacity: 0, y: -16 }}
-              style={{
-                position: 'absolute',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                color: 'var(--lime)',
-                fontWeight: 700,
-                fontFamily: 'var(--font-display)',
-                pointerEvents: 'none',
-              }}
+              key={quip}
+              className="pet-quip"
+              initial={{ opacity: 0, y: 12, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -18, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 22 }}
             >
-              {reaction}
+              “{quip}”
             </motion.div>
           )}
         </AnimatePresence>
 
         <h3 className="pet-name">
-          {pet.name} · <span style={{ color: 'var(--cyan)' }}>{copy.title}</span>
+          {pet.name} · <span className="pet-title-accent">{copy.title}</span>
         </h3>
         <p className="pet-blurb">{copy.blurb}</p>
+        <p className="pet-vibe">{copy.vibe}</p>
 
         <div className="xp-track" aria-hidden>
           <motion.div
@@ -104,9 +122,7 @@ export function CompanionPet({ pet, onReact }: Props) {
           <span>
             XP {xp} · pulled {pet.eventsPulled} · scheduled {pet.eventsScheduled}
           </span>
-          <span>
-            {xp >= 24 ? 'Max' : `next @ ${bar.next}`}
-          </span>
+          <span>{xp >= 24 ? 'Max diva' : `next @ ${bar.next}`}</span>
         </div>
       </div>
     </div>
