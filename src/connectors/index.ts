@@ -2,7 +2,8 @@
  * Source connectors. Google Calendar + Gmail are live when secrets + OAuth
  * are present; otherwise they fall back to demo mocks. Notes/Texts stay mock.
  */
-import type { EventCandidate, SourceConnector } from '../types'
+import type { EventCandidate } from '../types'
+import type { ConnectorPullResult, SourceConnector } from './types'
 import { freshPullBatch } from '../lib/seed'
 import { fetchGoogleConfig } from '../lib/googleConfig'
 import { getGoogleAccessToken } from '../lib/googleAuth'
@@ -15,7 +16,7 @@ import {
 import { googleCalendarConnector } from './googleCalendar'
 import { gmailConnector } from './gmail'
 
-export type { SourceConnector } from './types'
+export type { SourceConnector, ConnectorPullResult } from './types'
 export { googleCalendarConnector, googleCalendarConnectorStub } from './googleCalendar'
 export { gmailConnector, gmailConnectorStub } from './gmail'
 
@@ -23,9 +24,9 @@ export const notesConnector: SourceConnector = {
   id: 'notes',
   label: SOURCE_META.notes.label,
   accent: SOURCE_META.notes.accent,
-  async listCandidates() {
+  async listCandidates(): Promise<ConnectorPullResult> {
     await delay(220)
-    return demoNotesCandidates()
+    return { candidates: demoNotesCandidates(), usedDemo: true }
   },
 }
 
@@ -33,9 +34,9 @@ export const textsConnector: SourceConnector = {
   id: 'texts',
   label: SOURCE_META.texts.label,
   accent: SOURCE_META.texts.accent,
-  async listCandidates() {
+  async listCandidates(): Promise<ConnectorPullResult> {
     await delay(190)
-    return demoTextsCandidates()
+    return { candidates: demoTextsCandidates(), usedDemo: true }
   },
 }
 
@@ -53,6 +54,10 @@ export type PullMeta = {
   mode: 'live' | 'demo' | 'mixed'
   googleConfigured: boolean
   googleConnected: boolean
+  freshCount: number
+  errors: string[]
+  emptyHints: string[]
+  usedDemoSources: string[]
 }
 
 export async function pullAllSources(): Promise<{
@@ -61,15 +66,22 @@ export async function pullAllSources(): Promise<{
 }> {
   const config = await fetchGoogleConfig()
   const connected = Boolean(getGoogleAccessToken())
-  const live =
-    config.configured && !config.demoMode && connected
+  const live = config.configured && !config.demoMode && connected
 
-  const fromConnectors = (
-    await Promise.all(connectors.map((c) => c.listCandidates()))
-  ).flat()
+  const results = await Promise.all(connectors.map((c) => c.listCandidates()))
+  const fromConnectors = results.flatMap((r) => r.candidates)
+  const errors = results
+    .map((r) => r.error)
+    .filter((e): e is string => Boolean(e))
+  const emptyHints = results
+    .map((r) => r.emptyHint)
+    .filter((h): h is string => Boolean(h))
+  const usedDemoSources = connectors
+    .filter((_, i) => results[i]?.usedDemo)
+    .map((c) => c.label)
 
-  // In demo mode, mix a rotating fresh batch so each pull feels alive.
-  // In live mode, skip extras so Google results stay the signal.
+  // In demo / not-connected mode, mix a rotating fresh batch so each pull
+  // feels alive. In live Google mode, skip extras so Google is the signal.
   const extras = live ? [] : freshPullBatch().slice(0, 2)
   const candidates = [...fromConnectors, ...extras]
 
@@ -83,6 +95,10 @@ export async function pullAllSources(): Promise<{
       mode,
       googleConfigured: config.configured,
       googleConnected: connected,
+      freshCount: candidates.length,
+      errors,
+      emptyHints,
+      usedDemoSources,
     },
   }
 }

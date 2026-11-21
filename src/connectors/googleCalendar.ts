@@ -1,8 +1,9 @@
-import { addDays } from 'date-fns'
-import type { EventCandidate, SourceConnector } from '../types'
+import { addDays, subDays } from 'date-fns'
+import type { EventCandidate } from '../types'
+import type { ConnectorPullResult, SourceConnector } from './types'
 import { uid } from '../lib/id'
 import { fetchGoogleConfig } from '../lib/googleConfig'
-import { getGoogleAccessToken } from '../lib/googleAuth'
+import { clearGoogleToken, getGoogleAccessToken } from '../lib/googleAuth'
 import { delay, demoCalendarCandidates, SOURCE_META } from './demoData'
 
 type GCalEvent = {
@@ -20,15 +21,24 @@ type GCalList = {
   items?: GCalEvent[]
 }
 
-function mapCalendarEvent(ev: GCalEvent): EventCandidate | null {
+type CalendarList = {
+  items?: { id?: string; summary?: string; primary?: boolean; selected?: boolean }[]
+}
+
+function mapCalendarEvent(
+  ev: GCalEvent,
+  calendarLabel: string,
+): EventCandidate | null {
   if (ev.status === 'cancelled') return null
   const startRaw = ev.start?.dateTime ?? ev.start?.date
   const endRaw = ev.end?.dateTime ?? ev.end?.date
   if (!startRaw) return null
   const start = new Date(startRaw)
+  if (Number.isNaN(start.getTime())) return null
   const end = endRaw
     ? new Date(endRaw)
     : new Date(start.getTime() + 45 * 60 * 1000)
+  if (Number.isNaN(end.getTime())) return null
   const title = (ev.summary ?? 'Untitled event').trim()
   if (!title) return null
 
@@ -47,26 +57,21 @@ function mapCalendarEvent(ev: GCalEvent): EventCandidate | null {
     location: ev.location,
     notes: ev.description,
     source: 'calendar',
-    sourceLabel: 'Google Calendar · primary',
+    sourceLabel: calendarLabel,
     rawSnippet: snippetBits.join('').slice(0, 220),
-    confidence: allDay ? 0.88 : 0.96,
+    // Keep below auto-add threshold so inbox shows what was pulled;
+    // user can still one-tap schedule.
+    confidence: allDay ? 0.86 : 0.89,
     status: 'pending',
     color: SOURCE_META.calendar.accent,
   }
 }
 
-async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
-  const timeMin = new Date().toISOString()
-  const timeMax = addDays(new Date(), 45).toISOString()
-  const params = new URLSearchParams({
-    timeMin,
-    timeMax,
-    singleEvents: 'true',
-    orderBy: 'startTime',
-    maxResults: '25',
-  })
+async function listCalendarIds(accessToken: string): Promise<
+  { id: string; label: string }[]
+> {
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=20&minAccessRole=reader',
     {
       headers: {
         authorization: `Bearer ${accessToken}`,
@@ -75,12 +80,90 @@ async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
     },
   )
   if (!res.ok) {
+    // Fall back to primary only
+    return [{ id: 'primary', label: 'Google Calendar · primary' }]
+  }
+  const data = (await res.json()) as CalendarList
+  const picked = (data.items ?? [])
+    .filter((c) => c.id && (c.selected !== false || c.primary))
+    .slice(0, 8)
+    .map((c) => ({
+      id: c.id!,
+      label: c.primary
+        ? 'Google Calendar · primary'
+        : `Google Calendar · ${c.summary ?? c.id}`,
+    }))
+  return picked.length
+    ? picked
+    : [{ id: 'primary', label: 'Google Calendar · primary' }]
+}
+
+async function listEventsForCalendar(
+  accessToken: string,
+  calendarId: string,
+  label: string,
+): Promise<EventCandidate[]> {
+  const timeMin = subDays(new Date(), 2).toISOString()
+  const timeMax = addDays(new Date(), 60).toISOString()
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: '40',
+  })
+  const encoded = encodeURIComponent(calendarId)
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encoded}/events?${params}`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        accept: 'application/json',
+      },
+    },
+  )
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`calendar_auth_${res.status}`)
+  }
+  if (!res.ok) {
     throw new Error(`calendar_api_${res.status}`)
   }
   const data = (await res.json()) as GCalList
   return (data.items ?? [])
-    .map(mapCalendarEvent)
+    .map((ev) => mapCalendarEvent(ev, label))
     .filter((c): c is EventCandidate => Boolean(c))
+}
+
+async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
+  const calendars = await listCalendarIds(accessToken)
+  const batches = await Promise.all(
+    calendars.map(async (cal) => {
+      try {
+        return await listEventsForCalendar(accessToken, cal.id, cal.label)
+      } catch (err) {
+        // One calendar failing shouldn't wipe the whole pull
+        if (
+          err instanceof Error &&
+          (err.message.startsWith('calendar_auth_401') ||
+            err.message.startsWith('calendar_auth_403'))
+        ) {
+          throw err
+        }
+        return [] as EventCandidate[]
+      }
+    }),
+  )
+  const seen = new Set<string>()
+  const out: EventCandidate[] = []
+  for (const batch of batches) {
+    for (const c of batch) {
+      const key = `${c.title}|${c.start}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(c)
+    }
+  }
+  return out
 }
 
 /**
@@ -91,20 +174,38 @@ export const googleCalendarConnector: SourceConnector = {
   id: 'calendar',
   label: 'Google Calendar',
   accent: SOURCE_META.calendar.accent,
-  async listCandidates(): Promise<EventCandidate[]> {
+  async listCandidates(): Promise<ConnectorPullResult> {
     const config = await fetchGoogleConfig()
     const token = getGoogleAccessToken()
 
     if (!config.configured || config.demoMode || !token) {
       await delay(280)
-      return demoCalendarCandidates()
+      return { candidates: demoCalendarCandidates(), usedDemo: true }
     }
 
     try {
-      return await listFromGoogle(token)
-    } catch {
-      await delay(200)
-      return demoCalendarCandidates()
+      const candidates = await listFromGoogle(token)
+      return {
+        candidates,
+        emptyHint:
+          candidates.length === 0
+            ? 'No events in the next 60 days on your selected Google calendars.'
+            : undefined,
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'calendar_error'
+      if (message.includes('401') || message.includes('403')) {
+        clearGoogleToken()
+        return {
+          candidates: [],
+          error:
+            'Google Calendar access expired or missing scope — reconnect Google.',
+        }
+      }
+      return {
+        candidates: [],
+        error: `Google Calendar pull failed (${message}).`,
+      }
     }
   },
 }

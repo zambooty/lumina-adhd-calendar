@@ -1,7 +1,9 @@
-import type { EventCandidate, SourceConnector } from '../types'
+import { addDays, addHours, setHours, setMinutes, setSeconds } from 'date-fns'
+import type { EventCandidate } from '../types'
+import type { ConnectorPullResult, SourceConnector } from './types'
 import { uid } from '../lib/id'
 import { fetchGoogleConfig } from '../lib/googleConfig'
-import { getGoogleAccessToken } from '../lib/googleAuth'
+import { clearGoogleToken, getGoogleAccessToken } from '../lib/googleAuth'
 import {
   looksAppointmentLike,
   parseAppointmentWhen,
@@ -77,12 +79,21 @@ function titleFromSubject(subject: string, fallback: string): string {
   return cleaned.length > 72 ? `${cleaned.slice(0, 69)}…` : cleaned
 }
 
+/** Soft default when mail looks appointment-like but has no parseable time. */
+function fallbackWhen(now = new Date()): { start: Date; end: Date } {
+  const start = setSeconds(
+    setMinutes(setHours(addDays(now, 2), 10), 0),
+    0,
+  )
+  return { start, end: addHours(start, 1) }
+}
+
 async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
   const q =
-    'newer_than:90d (appointment OR confirmation OR confirmed OR scheduled OR reservation OR booking OR invite OR "you are booked" OR dentist OR therapy OR interview)'
+    'newer_than:120d (appointment OR confirmation OR confirmed OR scheduled OR reservation OR booking OR invite OR "you are booked" OR dentist OR therapy OR interview OR checkup OR "check-up" OR meeting OR calendar OR rsvp)'
   const listParams = new URLSearchParams({
     q,
-    maxResults: '12',
+    maxResults: '15',
   })
   const listRes = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages?${listParams}`,
@@ -93,9 +104,12 @@ async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
       },
     },
   )
+  if (listRes.status === 401 || listRes.status === 403) {
+    throw new Error(`gmail_auth_${listRes.status}`)
+  }
   if (!listRes.ok) throw new Error(`gmail_list_${listRes.status}`)
   const list = (await listRes.json()) as GmailList
-  const ids = (list.messages ?? []).map((m) => m.id).slice(0, 10)
+  const ids = (list.messages ?? []).map((m) => m.id).slice(0, 12)
 
   const candidates: EventCandidate[] = []
   for (const id of ids) {
@@ -114,22 +128,32 @@ async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
     const subject = header(headers, 'Subject')
     const from = header(headers, 'From')
     const text = `${subject}\n${extractText(msg)}`
-    if (!looksAppointmentLike(text) && !parseAppointmentWhen(text)) continue
-
+    const appointmentLike = looksAppointmentLike(text)
     const when = parseAppointmentWhen(text)
-    if (!when) continue
+
+    // Keep appointment-like mail even without a parsed datetime (soft schedule).
+    if (!appointmentLike && !when) continue
+
+    const soft = fallbackWhen()
+    const resolved = when ?? {
+      start: soft.start,
+      end: soft.end,
+      confidenceBoost: -0.12,
+    }
+
+    if (Number.isNaN(resolved.start.getTime())) continue
 
     const fromLabel = from.replace(/<.*>/, '').trim() || 'Gmail'
-    const baseConfidence = 0.78 + when.confidenceBoost
+    const baseConfidence = 0.72 + (when ? when.confidenceBoost : -0.08)
     candidates.push({
       id: uid('cand'),
       title: titleFromSubject(subject, 'Email appointment'),
-      start: when.start.toISOString(),
-      end: when.end.toISOString(),
+      start: resolved.start.toISOString(),
+      end: resolved.end.toISOString(),
       source: 'email',
       sourceLabel: `Gmail · ${fromLabel}`,
       rawSnippet: (msg.snippet ?? subject).slice(0, 220),
-      confidence: Math.min(0.97, baseConfidence),
+      confidence: Math.min(0.89, Math.max(0.55, baseConfidence)),
       status: 'pending',
       color: SOURCE_META.email.accent,
     })
@@ -145,26 +169,38 @@ export const gmailConnector: SourceConnector = {
   id: 'email',
   label: 'Gmail',
   accent: SOURCE_META.email.accent,
-  async listCandidates(): Promise<EventCandidate[]> {
+  async listCandidates(): Promise<ConnectorPullResult> {
     const config = await fetchGoogleConfig()
     const token = getGoogleAccessToken()
 
     if (!config.configured || config.demoMode || !token) {
       await delay(340)
-      return demoEmailCandidates()
+      return { candidates: demoEmailCandidates(), usedDemo: true }
     }
 
     try {
       const found = await listFromGmail(token)
-      if (found.length === 0) {
-        // Soft empty: still return demo so pull feels alive in thin inboxes
-        await delay(180)
-        return demoEmailCandidates()
+      return {
+        candidates: found,
+        emptyHint:
+          found.length === 0
+            ? 'No appointment-like Gmail messages matched in the last ~4 months.'
+            : undefined,
       }
-      return found
-    } catch {
-      await delay(200)
-      return demoEmailCandidates()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'gmail_error'
+      if (message.includes('401') || message.includes('403')) {
+        clearGoogleToken()
+        return {
+          candidates: [],
+          error:
+            'Gmail access expired or missing scope — reconnect Google.',
+        }
+      }
+      return {
+        candidates: [],
+        error: `Gmail pull failed (${message}).`,
+      }
     }
   },
 }

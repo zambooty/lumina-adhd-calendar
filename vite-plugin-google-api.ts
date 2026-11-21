@@ -47,18 +47,18 @@ function attachGoogleApi(
 
     if (url === '/api/google/exchange' && req.method === 'POST') {
       const origin = req.headers.origin
+      const referer = req.headers.referer
       const host = req.headers.host
-      if (
-        !origin ||
-        !host ||
-        (() => {
-          try {
-            return new URL(origin).host !== host
-          } catch {
-            return true
-          }
-        })()
-      ) {
+      const originHost = (() => {
+        try {
+          if (origin) return new URL(origin).host
+          if (referer) return new URL(referer).host
+          return null
+        } catch {
+          return null
+        }
+      })()
+      if (!host || !originHost || originHost !== host) {
         res.statusCode = 403
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify({ error: 'forbidden_origin' }))

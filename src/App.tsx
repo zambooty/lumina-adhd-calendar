@@ -11,6 +11,7 @@ export default function App() {
     state,
     pulling,
     toast,
+    pullStatus,
     pendingCandidates,
     upcomingEvents,
     dismissHero,
@@ -36,7 +37,7 @@ export default function App() {
           <div className="brand-mark">LUMINA</div>
           <div className="brand-sub">ADHD Calendar Companion</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div className="topbar-actions">
           <button type="button" className="btn btn-ghost btn-sm" onClick={hardReset}>
             Reset demo
           </button>
@@ -52,11 +53,12 @@ export default function App() {
       </header>
 
       <main className="layout">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div className="main-column">
           <SourceInbox
             candidates={pendingCandidates}
             pulling={pulling}
             autoAdd={state.autoAddHighConfidence}
+            pullStatus={pullStatus}
             onPull={pullSources}
             onSchedule={scheduleCandidate}
             onDismiss={dismissCandidate}
