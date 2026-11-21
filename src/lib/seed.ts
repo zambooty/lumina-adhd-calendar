@@ -12,6 +12,27 @@ function iso(d: Date): string {
   return d.toISOString()
 }
 
+/** Empty starter — used when Google is live / after wipe so no fake appointments linger. */
+export function createEmptyState(): AppState {
+  const stacks = createDefaultStacks()
+  const now = new Date().toISOString()
+  return {
+    events: [],
+    candidates: [],
+    defaultStackId: stacks[0].id,
+    stacks,
+    pet: {
+      name: 'Blink',
+      eventsPulled: 0,
+      eventsScheduled: 0,
+    },
+    autoAddHighConfidence: true,
+    hasSeenHero: false,
+    seededAt: now,
+  }
+}
+
+/** Demo-only seed for offline / secrets-unset mode. Not used when Google is live. */
 export function createSeedState(): AppState {
   const stacks = createDefaultStacks()
   const defaultStackId = stacks[0].id
@@ -111,7 +132,7 @@ export function createSeedState(): AppState {
   }
 }
 
-/** Extra mock pulls for “Pull from sources” — feels automatic & alive. */
+/** Extra mock pulls for “Pull from sources” — demo mode only. */
 export function freshPullBatch(): EventCandidate[] {
   const stamp = Date.now()
   return [

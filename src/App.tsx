@@ -39,7 +39,7 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <button type="button" className="btn btn-ghost btn-sm" onClick={hardReset}>
-            Reset demo
+            Reset
           </button>
           <button
             type="button"

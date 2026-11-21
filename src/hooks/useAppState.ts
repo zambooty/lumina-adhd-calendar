@@ -232,7 +232,7 @@ export function useAppState() {
     const next = resetState()
     setState(next)
     setPullStatus(null)
-    flash('Demo data restored')
+    flash('Cleared · empty calendar & inbox')
   }, [flash])
 
   const pendingCandidates = useMemo(

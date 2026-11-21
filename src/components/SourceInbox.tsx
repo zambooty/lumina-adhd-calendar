@@ -31,7 +31,7 @@ export function SourceInbox({
         <div>
           <h2 className="panel-title">Source inbox</h2>
           <p className="panel-hint">
-            Google Calendar · Gmail · Notes · Texts — appointment detection
+            Google Calendar · Gmail first — Notes/Texts mock only in demo mode
           </p>
         </div>
         <button
@@ -88,8 +88,8 @@ export function SourceInbox({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              Inbox clear. Connect Google + Pull to load Calendar/Gmail, or pull
-              demo Notes/Texts anytime.
+              Inbox clear. Connect Google, then Pull to load real Calendar and
+              Gmail. Notes/Texts stay empty while Google is live.
             </motion.p>
           ) : (
             candidates.map((c) => (
