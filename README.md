@@ -22,6 +22,20 @@ Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointmen
 
 ## Android (Capacitor) — build & run on device
 
+### Download debug APK
+
+**[Download `lumina-debug.apk`](https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21/lumina-debug.apk)** — sideloadable debug build (release [`android-debug-2026-11-21`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21)).
+
+| | |
+|---|---|
+| Size | ~4.3 MB |
+| SHA-256 | `c39ddc1bb10c0a7fcff218acd9c698433426b867344f194e3d33feb344360449` |
+| Built from | `main` @ `b8277af` |
+| App ID | `com.makesoft.lumina` |
+
+Install: download on your phone and open it, or `adb install -r lumina-debug.apk`.  
+A copy also lives at [`releases/lumina-debug.apk`](releases/lumina-debug.apk) in this repo. Prefer the **Release** link above for downloads.
+
 **Requirements on your machine**
 
 - Node.js + npm
