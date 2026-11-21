@@ -80,7 +80,7 @@ export function useAppState() {
   const pullSources = useCallback(async () => {
     setPulling(true)
     try {
-      const found = await pullAllSources()
+      const { candidates: found, meta } = await pullAllSources()
       let autoScheduled = 0
       setState((s) => {
         const existingKeys = new Set(
@@ -98,6 +98,7 @@ export function useAppState() {
 
         for (const c of fresh) {
           if (s.autoAddHighConfidence && c.confidence >= 0.9) {
+            // Schedule into LUMINA with the default ADHD reminder stack.
             nextEvents.push({
               id: uid('evt'),
               title: c.title,
@@ -132,12 +133,18 @@ export function useAppState() {
           },
         }
       })
+      const modeTag =
+        meta.mode === 'live'
+          ? 'Google live'
+          : meta.mode === 'mixed'
+            ? 'Google ready · demo pull'
+            : 'Demo'
       if (autoScheduled > 0) {
         flash(
-          `Pulled ${autoScheduled} high-confidence item${autoScheduled > 1 ? 's' : ''} · auto-added`,
+          `${modeTag} · auto-added ${autoScheduled} · pet XP up`,
         )
       } else {
-        flash('Sources scanned · new candidates ready')
+        flash(`${modeTag} · candidates ready · pet XP up`)
       }
     } finally {
       setPulling(false)

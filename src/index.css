@@ -604,6 +604,63 @@ a {
   gap: 1.25rem;
 }
 
+.google-connect {
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(61, 255, 212, 0.22);
+  background:
+    linear-gradient(135deg, rgba(61, 255, 212, 0.08), rgba(77, 184, 255, 0.05)),
+    rgba(0, 0, 0, 0.22);
+}
+
+.google-connect-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.google-connect-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  background: linear-gradient(110deg, var(--cyan), var(--sky));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.google-connect-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-width: 28rem;
+}
+
+.google-connect-error {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  color: var(--coral);
+}
+
+.mode-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.mode-chip-demo {
+  color: var(--amber);
+  border-color: rgba(255, 176, 32, 0.4);
+  background: rgba(255, 176, 32, 0.1);
+  box-shadow: 0 0 16px rgba(255, 176, 32, 0.15);
+}
+
 .source-dots {
   display: flex;
   flex-wrap: wrap;

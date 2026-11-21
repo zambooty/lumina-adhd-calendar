@@ -1,10 +1,10 @@
 /**
  * Connector contract for source pulls.
  *
- * Real-integration priority (confirmed):
- *   1. Google Calendar  → replace mock `calendar` connector
- *   2. Gmail            → replace mock `email` connector
- *   3. Notes / Texts    → later
+ * Real-integration priority:
+ *   1. Google Calendar  → `googleCalendarConnector` (live + demo fallback)
+ *   2. Gmail            → `gmailConnector` (live + demo fallback)
+ *   3. Notes / Texts    → still mock
  *
  * Keep `listCandidates()` returning `EventCandidate[]` so the inbox UI
  * stays unchanged when swapping mocks for OAuth-backed clients.

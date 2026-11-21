@@ -16,37 +16,52 @@ npm run build
 npm run preview
 ```
 
-## What’s in the MVP
+Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointment candidates). Notes + Texts stay mock.
+
+## Google Calendar + Gmail
+
+Real connectors live in `src/connectors/googleCalendar.ts` and `src/connectors/gmail.ts`.
+
+1. Create a Google Cloud OAuth **Web** client.
+2. Bind Cursor app secrets (never paste values into chat):
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+3. Authorized JavaScript origins must include your published app origin (and `http://127.0.0.1:5173` for local).
+4. In the app, **Connect Google**, then **Pull from sources**.
+
+Server routes (Cursor host + Vite dev middleware):
+
+- `GET /api/google/status` — configured vs demo; returns client id for GIS when set
+- `POST /api/google/exchange` — optional auth-code exchange when the client secret is bound
+
+Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens stay in `sessionStorage` for the browser session.
+
+Pulled / scheduled items attach the default **ADHD reminder stack**; pet XP still counts every pull + schedule.
+
+## What’s in the app
 
 - **Calendar** — Upcoming events with vivid source colors and per-event reminder stack selection.
-- **Source inbox** — Mock connectors for **Calendar**, **Notes**, **Email**, and **Texts**. “Pull from sources” scans them, parses appointment-like phrases into candidates, and can **auto-add** high-confidence (≥90%) items so capture feels automatic.
-- **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more) plus per-event override via stack picker.
-- **Companion pet (Blink)** — XP = events pulled + events scheduled. Stages: egg → hatchling → cub → glowfox → legend. Tap/hover for reactions; idle glow animation.
-- **Persistence** — `localStorage` key `lumen_adhd_companion_v1` (events, candidates, stacks, pet, prefs). **Reset demo** restores seeded data.
-- **PWA-ready** — `manifest.webmanifest` + theme color for installable shell later.
+- **Source inbox** — Google Calendar + Gmail (live or demo) plus mock Notes / Texts. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
+- **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more).
+- **Companion pet (Blink)** — XP = events pulled + events scheduled.
+- **Persistence** — `localStorage` key `lumen_adhd_companion_v1`. **Reset demo** restores seeded data.
+- **PWA-ready** — `manifest.webmanifest` + theme color.
 
-## Mock vs real connectors
+## Connectors
 
-Connectors implement `SourceConnector` (`listCandidates()` → `EventCandidate[]`) in `src/connectors/`.
-
-**Real-integration priority (confirmed):** Google Calendar first, then Gmail, then Notes / Texts. Stubs: `src/connectors/googleCalendar.ts`, `src/connectors/gmail.ts`. MVP keeps mocks only — stubs throw until OAuth is wired.
-
-| Source   | MVP (this repo)                         | Real target (order)                              |
-|----------|-----------------------------------------|--------------------------------------------------|
-| Calendar | Seeded + mock shared-calendar phrases   | **#1 Google Calendar** (OAuth API)               |
-| Email    | Mock confirmation emails                | **#2 Gmail** (OAuth + appointment heuristics)    |
-| Notes    | Demo sticky / brain-dump parsing        | Later — notes apps / local ingest                |
-| Texts    | Mock SMS threads                        | Later — SMS / RCS where permissions allow        |
-
-Swap a mock for a real client without rewriting the inbox UI — same `listCandidates()` shape.
+| Source   | Status                                              |
+|----------|-----------------------------------------------------|
+| Calendar | **Google Calendar** (OAuth) + demo fallback         |
+| Email    | **Gmail** (OAuth + appointment heuristics) + demo   |
+| Notes    | Mock sticky / brain-dump parsing                    |
+| Texts    | Mock SMS threads                                    |
 
 ## Android follow-up path
 
-1. Lock UX on this web/PWA MVP (publishable demo).
-2. Wrap with **Capacitor** (or similar) for Android WebView + native plugins.
-3. Replace mock connectors with Android calendar / notification / (where allowed) SMS or account-linked email APIs.
-4. Keep reminder stacks and pet XP logic shared; only the connector + notification delivery layers go native.
+1. Lock UX on this web/PWA MVP.
+2. Wrap with **Capacitor** (or similar) for Android.
+3. Keep reminder stacks and pet XP shared; only connector + notification delivery go native.
 
 ## Design notes
 
-Dark-only atmospheric UI (no light theme). Brand **LUMINA** is the hero signal. Fonts: Syne + Outfit. Accents: cyan / lime / coral / amber on deep navy-black — not purple-default AI chrome.
+Dark-only atmospheric UI (no light theme). Brand **LUMINA** is the hero signal. Fonts: Syne + Outfit. Accents: cyan / lime / coral / amber on deep navy-black.
