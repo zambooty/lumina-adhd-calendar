@@ -62,7 +62,7 @@ export function SourceInbox({
           Auto-add high-confidence (≥90%) — feels automatic
         </label>
 
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence initial={false}>
           {candidates.length === 0 ? (
             <motion.p
               key="empty"
@@ -78,11 +78,10 @@ export function SourceInbox({
               <motion.div
                 key={c.id}
                 className="candidate"
-                layout
-                initial={{ opacity: 0, y: 16, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 40, height: 0, margin: 0, padding: 0 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: 24 }}
+                transition={{ duration: 0.22 }}
               >
                 <div
                   style={{

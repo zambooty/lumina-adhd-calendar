@@ -1,7 +1,16 @@
+/**
+ * MVP mock connectors. Real swap order (confirmed):
+ * Google Calendar → Gmail → Notes / Texts.
+ * Stubs live in `./googleCalendar.ts` and `./gmail.ts`.
+ */
 import type { EventCandidate, SourceConnector, SourceKind } from '../types'
 import { freshPullBatch } from '../lib/seed'
 import { uid } from '../lib/id'
 import { addDays, setHours, setMinutes } from 'date-fns'
+
+export type { SourceConnector } from './types'
+export { googleCalendarConnectorStub } from './googleCalendar'
+export { gmailConnectorStub } from './gmail'
 
 function at(dayOffset: number, hour: number, minute = 0): Date {
   return addDays(setMinutes(setHours(new Date(), hour), minute), dayOffset)

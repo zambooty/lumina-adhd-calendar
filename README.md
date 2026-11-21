@@ -27,16 +27,18 @@ npm run preview
 
 ## Mock vs real connectors
 
-Connectors implement a small `SourceConnector` interface (`listCandidates()` → proposed events) in `src/connectors/index.ts`.
+Connectors implement `SourceConnector` (`listCandidates()` → `EventCandidate[]`) in `src/connectors/`.
 
-| Source   | MVP (this repo)                         | Next (real)                                      |
+**Real-integration priority (confirmed):** Google Calendar first, then Gmail, then Notes / Texts. Stubs: `src/connectors/googleCalendar.ts`, `src/connectors/gmail.ts`. MVP keeps mocks only — stubs throw until OAuth is wired.
+
+| Source   | MVP (this repo)                         | Real target (order)                              |
 |----------|-----------------------------------------|--------------------------------------------------|
-| Calendar | Seeded + mock shared-calendar phrases   | Google Calendar / device calendar APIs           |
-| Notes    | Demo sticky / brain-dump parsing        | Notes apps or local note ingest                  |
-| Email    | Mock confirmation emails                | Gmail API (OAuth) with appointment heuristics    |
-| Texts    | Mock SMS threads                        | SMS / RCS where platform permissions allow       |
+| Calendar | Seeded + mock shared-calendar phrases   | **#1 Google Calendar** (OAuth API)               |
+| Email    | Mock confirmation emails                | **#2 Gmail** (OAuth + appointment heuristics)    |
+| Notes    | Demo sticky / brain-dump parsing        | Later — notes apps / local ingest                |
+| Texts    | Mock SMS threads                        | Later — SMS / RCS where permissions allow        |
 
-Swap a mock connector for a real one without rewriting the inbox UI — keep `listCandidates()` returning `EventCandidate` shapes.
+Swap a mock for a real client without rewriting the inbox UI — same `listCandidates()` shape.
 
 ## Android follow-up path
 
