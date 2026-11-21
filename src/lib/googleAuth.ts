@@ -80,10 +80,9 @@ function loadGisScript(): Promise<void> {
  * Canonical OAuth redirect_uri sent to Google (auth + token exchange).
  * Exact string: `${window.location.origin}` — no path, no trailing slash.
  *
- * Register BOTH in Cloud Console → Credentials → Web client:
- *   - https://lumina-calendar-f5eb.apps.grok.bot
- *   - https://lumina-calendar-f5eb.apps.grok.bot/
- * Also Authorized JavaScript origins: https://lumina-calendar-f5eb.apps.grok.bot
+ * Google Cloud Console → Credentials → OAuth Web client must include the
+ * exact JS origins + redirect URIs listed in README (published + local,
+ * with and without trailing slash on redirect URIs).
  */
 export function getOAuthRedirectUri(): string {
   return window.location.origin
