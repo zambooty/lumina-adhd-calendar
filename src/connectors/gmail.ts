@@ -3,7 +3,17 @@ import type { EventCandidate } from '../types'
 import type { ConnectorPullResult, SourceConnector } from './types'
 import { uid } from '../lib/id'
 import { fetchGoogleConfig } from '../lib/googleConfig'
-import { clearGoogleToken, getGoogleAccessToken } from '../lib/googleAuth'
+import {
+  clearGoogleToken,
+  ensureGoogleAccessToken,
+  getGoogleAccessToken,
+  getGoogleGrantedScopes,
+} from '../lib/googleAuth'
+import {
+  classifyGoogleApiError,
+  googleAuthHeaders,
+} from '../lib/googleApiAuth'
+import { hasGmailScope } from '../lib/googleScopes'
 import {
   looksAppointmentLike,
   parseAppointmentWhen,
@@ -98,14 +108,12 @@ async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
   const listRes = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages?${listParams}`,
     {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        accept: 'application/json',
-      },
+      headers: googleAuthHeaders(accessToken),
     },
   )
   if (listRes.status === 401 || listRes.status === 403) {
-    throw new Error(`gmail_auth_${listRes.status}`)
+    const failure = await classifyGoogleApiError(listRes, 'Gmail')
+    throw Object.assign(new Error(failure.message), { googleFailure: failure })
   }
   if (!listRes.ok) throw new Error(`gmail_list_${listRes.status}`)
   const list = (await listRes.json()) as GmailList
@@ -116,10 +124,7 @@ async function listFromGmail(accessToken: string): Promise<EventCandidate[]> {
     const msgRes = await fetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
       {
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          accept: 'application/json',
-        },
+        headers: googleAuthHeaders(accessToken),
       },
     )
     if (!msgRes.ok) continue
@@ -171,11 +176,23 @@ export const gmailConnector: SourceConnector = {
   accent: SOURCE_META.email.accent,
   async listCandidates(): Promise<ConnectorPullResult> {
     const config = await fetchGoogleConfig()
+    if (config.configured && !config.demoMode && !getGoogleAccessToken()) {
+      await ensureGoogleAccessToken()
+    }
     const token = getGoogleAccessToken()
 
     if (!config.configured || config.demoMode || !token) {
       await delay(340)
       return { candidates: demoEmailCandidates(), usedDemo: true }
+    }
+
+    const granted = getGoogleGrantedScopes()
+    if (granted && !hasGmailScope(granted)) {
+      return {
+        candidates: [],
+        error:
+          'Gmail scope missing — reconnect Google and allow gmail.readonly.',
+      }
     }
 
     try {
@@ -188,15 +205,16 @@ export const gmailConnector: SourceConnector = {
             : undefined,
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'gmail_error'
-      if (message.includes('401') || message.includes('403')) {
-        clearGoogleToken()
-        return {
-          candidates: [],
-          error:
-            'Gmail access expired or missing scope — reconnect Google.',
+      const failure = (
+        err as {
+          googleFailure?: import('../lib/googleApiAuth').GoogleApiFailure
         }
+      ).googleFailure
+      if (failure) {
+        if (failure.shouldClearToken) clearGoogleToken()
+        return { candidates: [], error: failure.message }
       }
+      const message = err instanceof Error ? err.message : 'gmail_error'
       return {
         candidates: [],
         error: `Gmail pull failed (${message}).`,

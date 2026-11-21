@@ -3,7 +3,17 @@ import type { EventCandidate } from '../types'
 import type { ConnectorPullResult, SourceConnector } from './types'
 import { uid } from '../lib/id'
 import { fetchGoogleConfig } from '../lib/googleConfig'
-import { clearGoogleToken, getGoogleAccessToken } from '../lib/googleAuth'
+import {
+  clearGoogleToken,
+  ensureGoogleAccessToken,
+  getGoogleAccessToken,
+  getGoogleGrantedScopes,
+} from '../lib/googleAuth'
+import {
+  classifyGoogleApiError,
+  googleAuthHeaders,
+} from '../lib/googleApiAuth'
+import { hasCalendarScope } from '../lib/googleScopes'
 import { delay, demoCalendarCandidates, SOURCE_META } from './demoData'
 
 type GCalEvent = {
@@ -73,14 +83,15 @@ async function listCalendarIds(accessToken: string): Promise<
   const res = await fetch(
     'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=20&minAccessRole=reader',
     {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        accept: 'application/json',
-      },
+      headers: googleAuthHeaders(accessToken),
     },
   )
+  if (res.status === 401 || res.status === 403) {
+    const failure = await classifyGoogleApiError(res, 'Google Calendar')
+    throw Object.assign(new Error(failure.message), { googleFailure: failure })
+  }
   if (!res.ok) {
-    // Fall back to primary only
+    // Non-auth failure — fall back to primary only
     return [{ id: 'primary', label: 'Google Calendar · primary' }]
   }
   const data = (await res.json()) as CalendarList
@@ -116,14 +127,12 @@ async function listEventsForCalendar(
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encoded}/events?${params}`,
     {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        accept: 'application/json',
-      },
+      headers: googleAuthHeaders(accessToken),
     },
   )
   if (res.status === 401 || res.status === 403) {
-    throw new Error(`calendar_auth_${res.status}`)
+    const failure = await classifyGoogleApiError(res, 'Google Calendar')
+    throw Object.assign(new Error(failure.message), { googleFailure: failure })
   }
   if (!res.ok) {
     throw new Error(`calendar_api_${res.status}`)
@@ -141,14 +150,11 @@ async function listFromGoogle(accessToken: string): Promise<EventCandidate[]> {
       try {
         return await listEventsForCalendar(accessToken, cal.id, cal.label)
       } catch (err) {
+        const failure = (
+          err as { googleFailure?: { shouldClearToken?: boolean } }
+        ).googleFailure
+        if (failure?.shouldClearToken) throw err
         // One calendar failing shouldn't wipe the whole pull
-        if (
-          err instanceof Error &&
-          (err.message.startsWith('calendar_auth_401') ||
-            err.message.startsWith('calendar_auth_403'))
-        ) {
-          throw err
-        }
         return [] as EventCandidate[]
       }
     }),
@@ -176,11 +182,24 @@ export const googleCalendarConnector: SourceConnector = {
   accent: SOURCE_META.calendar.accent,
   async listCandidates(): Promise<ConnectorPullResult> {
     const config = await fetchGoogleConfig()
+    // Renew expired access tokens before treating as demo.
+    if (config.configured && !config.demoMode && !getGoogleAccessToken()) {
+      await ensureGoogleAccessToken()
+    }
     const token = getGoogleAccessToken()
 
     if (!config.configured || config.demoMode || !token) {
       await delay(280)
       return { candidates: demoCalendarCandidates(), usedDemo: true }
+    }
+
+    const granted = getGoogleGrantedScopes()
+    if (granted && !hasCalendarScope(granted)) {
+      return {
+        candidates: [],
+        error:
+          'Google Calendar scope missing — reconnect Google and allow calendar.readonly.',
+      }
     }
 
     try {
@@ -193,15 +212,13 @@ export const googleCalendarConnector: SourceConnector = {
             : undefined,
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'calendar_error'
-      if (message.includes('401') || message.includes('403')) {
-        clearGoogleToken()
-        return {
-          candidates: [],
-          error:
-            'Google Calendar access expired or missing scope — reconnect Google.',
-        }
+      const failure = (err as { googleFailure?: import('../lib/googleApiAuth').GoogleApiFailure })
+        .googleFailure
+      if (failure) {
+        if (failure.shouldClearToken) clearGoogleToken()
+        return { candidates: [], error: failure.message }
       }
+      const message = err instanceof Error ? err.message : 'calendar_error'
       return {
         candidates: [],
         error: `Google Calendar pull failed (${message}).`,
