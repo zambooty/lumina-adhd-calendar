@@ -27,14 +27,17 @@ Real connectors live in `src/connectors/googleCalendar.ts` and `src/connectors/g
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
 3. Authorized JavaScript origins must include your published app origin (and `http://127.0.0.1:5173` for local).
-4. In the app, **Connect Google**, then **Pull from sources**.
+4. Authorized **redirect URIs** must include the same origin with a trailing slash (e.g. `https://your-app.apps.grok.bot/`) — mobile uses redirect OAuth instead of GIS popups.
+5. In the app, **Connect Google**, then **Pull from sources**.
 
 Server routes (Cursor host + Vite dev middleware):
 
 - `GET /api/google/status` — configured vs demo; returns client id for GIS when set
-- `POST /api/google/exchange` — optional auth-code exchange when the client secret is bound
+- `POST /api/google/exchange` — auth-code → token exchange (required for mobile redirect flow)
 
-Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens stay in `sessionStorage` for the browser session.
+Scopes: `calendar.readonly` + `gmail.readonly`. Access tokens persist in `localStorage` (and mirror to `sessionStorage`).
+
+Mobile notes: GIS popups often blank the page on iOS/Android browsers, so Connect Google uses a redirect + `/api/google/exchange` path on coarse/narrow viewports. Pull shows honest empty/error status instead of silent demo fallback when live.
 
 Pulled / scheduled items attach the default **ADHD reminder stack**; pet XP still counts every pull + schedule.
 

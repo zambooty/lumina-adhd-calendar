@@ -14,6 +14,7 @@ export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
   const [pulling, setPulling] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [pullStatus, setPullStatus] = useState<string | null>(null)
 
   useEffect(() => {
     saveState(state)
@@ -21,7 +22,7 @@ export function useAppState() {
 
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 2800)
+    const t = setTimeout(() => setToast(null), 4200)
     return () => clearTimeout(t)
   }, [toast])
 
@@ -79,16 +80,17 @@ export function useAppState() {
 
   const pullSources = useCallback(async () => {
     setPulling(true)
+    setPullStatus(null)
     try {
       const { candidates: found, meta } = await pullAllSources()
       let autoScheduled = 0
+      let freshCount = 0
+
       setState((s) => {
-        const existingKeys = new Set(
-          [
-            ...s.candidates.map((c) => `${c.title}|${c.start}`),
-            ...s.events.map((e) => `${e.title}|${e.start}`),
-          ],
-        )
+        const existingKeys = new Set([
+          ...s.candidates.map((c) => `${c.title}|${c.start}`),
+          ...s.events.map((e) => `${e.title}|${e.start}`),
+        ])
         const fresh = found.filter(
           (c) => !existingKeys.has(`${c.title}|${c.start}`),
         )
@@ -98,7 +100,6 @@ export function useAppState() {
 
         for (const c of fresh) {
           if (s.autoAddHighConfidence && c.confidence >= 0.9) {
-            // Schedule into LUMINA with the default ADHD reminder stack.
             nextEvents.push({
               id: uid('evt'),
               title: c.title,
@@ -119,6 +120,9 @@ export function useAppState() {
           }
         }
 
+        // Capture counts for toast (updater may run twice in StrictMode —
+        // last run wins; counts stay consistent with that run).
+        freshCount = fresh.length
         autoScheduled = scheduled
         nextEvents.sort((a, b) => +new Date(a.start) - +new Date(b.start))
 
@@ -133,19 +137,44 @@ export function useAppState() {
           },
         }
       })
+
       const modeTag =
         meta.mode === 'live'
           ? 'Google live'
           : meta.mode === 'mixed'
             ? 'Google ready · demo pull'
             : 'Demo'
-      if (autoScheduled > 0) {
+
+      if (meta.errors.length) {
+        const errLine = meta.errors[0]
+        setPullStatus(errLine)
+        flash(`${modeTag} · ${errLine}`)
+      } else if (freshCount === 0) {
+        const hint =
+          meta.emptyHints[0] ??
+          (meta.mode === 'live'
+            ? 'No new items — inbox already has matches, or sources were empty.'
+            : 'No new items this pull.')
+        setPullStatus(hint)
+        flash(`${modeTag} · 0 new`)
+      } else if (autoScheduled > 0) {
+        setPullStatus(
+          `Added ${freshCount} · auto-scheduled ${autoScheduled} high-confidence.`,
+        )
         flash(
-          `${modeTag} · auto-added ${autoScheduled} · pet XP up`,
+          `${modeTag} · ${freshCount} new · auto-added ${autoScheduled} · pet XP up`,
         )
       } else {
-        flash(`${modeTag} · candidates ready · pet XP up`)
+        setPullStatus(
+          `${freshCount} new candidate${freshCount === 1 ? '' : 's'} ready.`,
+        )
+        flash(`${modeTag} · ${freshCount} new · pet XP up`)
       }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Pull failed unexpectedly.'
+      setPullStatus(message)
+      flash(`Pull failed · ${message}`)
     } finally {
       setPulling(false)
     }
@@ -202,6 +231,7 @@ export function useAppState() {
   const hardReset = useCallback(() => {
     const next = resetState()
     setState(next)
+    setPullStatus(null)
     flash('Demo data restored')
   }, [flash])
 
@@ -222,6 +252,7 @@ export function useAppState() {
     state,
     pulling,
     toast,
+    pullStatus,
     pendingCandidates,
     upcomingEvents,
     dismissHero,

@@ -1,10 +1,20 @@
 import { readGoogleEnv } from '../../server/googleEnv.js'
 
 function isSameOrigin(request: Request): boolean {
+  const requestOrigin = new URL(request.url).origin
   const origin = request.headers.get('origin')
-  if (!origin) return false
+  if (origin) {
+    try {
+      return new URL(origin).origin === requestOrigin
+    } catch {
+      return false
+    }
+  }
+  // Some mobile browsers omit Origin on same-origin POSTs — fall back to Referer.
+  const referer = request.headers.get('referer')
+  if (!referer) return false
   try {
-    return new URL(origin).origin === new URL(request.url).origin
+    return new URL(referer).origin === requestOrigin
   } catch {
     return false
   }

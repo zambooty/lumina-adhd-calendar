@@ -66,9 +66,4 @@ export type AppState = {
   seededAt: string
 }
 
-export type SourceConnector = {
-  id: SourceKind
-  label: string
-  accent: string
-  listCandidates: () => Promise<EventCandidate[]>
-}
+export type { SourceConnector, ConnectorPullResult } from './connectors/types'

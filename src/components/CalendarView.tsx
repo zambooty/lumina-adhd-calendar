@@ -1,7 +1,8 @@
-import { format, isToday, isTomorrow, parseISO } from 'date-fns'
+import { isToday, isTomorrow } from 'date-fns'
 import { motion } from 'framer-motion'
 import type { CalendarEvent, ReminderStack } from '../types'
 import { formatOffset } from '../lib/reminders'
+import { safeFormatIso, safeParseIso } from '../lib/safeDate'
 
 type Props = {
   events: CalendarEvent[]
@@ -10,10 +11,11 @@ type Props = {
 }
 
 function dayLabel(iso: string): string {
-  const d = parseISO(iso)
+  const d = safeParseIso(iso)
+  if (!d) return 'Date TBD'
   if (isToday(d)) return 'Today'
   if (isTomorrow(d)) return 'Tomorrow'
-  return format(d, 'EEE · MMM d')
+  return safeFormatIso(iso, 'EEE · MMM d')
 }
 
 export function CalendarView({ events, stacks, onChangeStack }: Props) {
@@ -56,7 +58,7 @@ export function CalendarView({ events, stacks, onChangeStack }: Props) {
                       {dayLabel(event.start)}
                     </span>
                     {' · '}
-                    {format(parseISO(event.start), 'h:mm a')}
+                    {safeFormatIso(event.start, 'h:mm a')}
                     {event.sourceLabel ? ` · ${event.sourceLabel}` : ''}
                   </p>
                   <h3 className="event-title">{event.title}</h3>
@@ -71,14 +73,14 @@ export function CalendarView({ events, stacks, onChangeStack }: Props) {
                     ))}
                   </div>
                 </div>
-                <div>
+                <div className="event-stack-control">
                   <label className="event-meta" htmlFor={`stack-${event.id}`}>
                     Stack
                   </label>
                   <select
                     id={`stack-${event.id}`}
                     className="select"
-                    style={{ marginTop: 4, minWidth: 140 }}
+                    style={{ marginTop: 4 }}
                     value={event.reminderStackId}
                     onChange={(e) => onChangeStack(event.id, e.target.value)}
                   >

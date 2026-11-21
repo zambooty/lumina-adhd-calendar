@@ -1,13 +1,14 @@
-import { format, parseISO } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { EventCandidate } from '../types'
 import { connectors } from '../connectors'
+import { safeFormatIso } from '../lib/safeDate'
 import { GoogleConnect } from './GoogleConnect'
 
 type Props = {
   candidates: EventCandidate[]
   pulling: boolean
   autoAdd: boolean
+  pullStatus?: string | null
   onPull: () => void
   onSchedule: (id: string) => void
   onDismiss: (id: string) => void
@@ -18,6 +19,7 @@ export function SourceInbox({
   candidates,
   pulling,
   autoAdd,
+  pullStatus,
   onPull,
   onSchedule,
   onDismiss,
@@ -64,6 +66,19 @@ export function SourceInbox({
           Auto-add high-confidence (≥90%) — feels automatic
         </label>
 
+        {pullStatus && (
+          <p
+            className={`pull-status ${
+              /fail|error|expired|missing|0 new/i.test(pullStatus)
+                ? 'pull-status-warn'
+                : 'pull-status-ok'
+            }`}
+            role="status"
+          >
+            {pullStatus}
+          </p>
+        )}
+
         <AnimatePresence initial={false}>
           {candidates.length === 0 ? (
             <motion.p
@@ -73,7 +88,8 @@ export function SourceInbox({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              Inbox clear. Pull again anytime — Google or demo appointments appear.
+              Inbox clear. Connect Google + Pull to load Calendar/Gmail, or pull
+              demo Notes/Texts anytime.
             </motion.p>
           ) : (
             candidates.map((c) => (
@@ -85,21 +101,14 @@ export function SourceInbox({
                 exit={{ opacity: 0, x: 24 }}
                 transition={{ duration: 0.22 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: '0.5rem',
-                    flexWrap: 'wrap',
-                  }}
-                >
+                <div className="candidate-top">
                   <div>
                     <p className="event-meta" style={{ margin: 0 }}>
                       <span style={{ color: c.color, fontWeight: 700 }}>
                         {c.sourceLabel}
                       </span>
                       {' · '}
-                      {format(parseISO(c.start), 'EEE h:mm a')}
+                      {safeFormatIso(c.start, 'EEE h:mm a')}
                     </p>
                     <h3 className="event-title" style={{ marginTop: 4 }}>
                       {c.title}
