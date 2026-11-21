@@ -2,6 +2,7 @@ import { format, parseISO } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { EventCandidate } from '../types'
 import { connectors } from '../connectors'
+import { GoogleConnect } from './GoogleConnect'
 
 type Props = {
   candidates: EventCandidate[]
@@ -28,7 +29,7 @@ export function SourceInbox({
         <div>
           <h2 className="panel-title">Source inbox</h2>
           <p className="panel-hint">
-            Mock Calendar · Notes · Email · Texts — appointment detection
+            Google Calendar · Gmail · Notes · Texts — appointment detection
           </p>
         </div>
         <button
@@ -41,6 +42,7 @@ export function SourceInbox({
         </button>
       </div>
       <div className="panel-body">
+        <GoogleConnect />
         <div className="source-dots">
           {connectors.map((c) => (
             <span
@@ -71,7 +73,7 @@ export function SourceInbox({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              Inbox clear. Pull again anytime — new demo appointments appear.
+              Inbox clear. Pull again anytime — Google or demo appointments appear.
             </motion.p>
           ) : (
             candidates.map((c) => (
