@@ -29,7 +29,9 @@ export function CalendarView({ events, stacks, onChangeStack }: Props) {
       </div>
       <div className="panel-body">
         {events.length === 0 ? (
-          <p className="empty">No events yet — pull from sources to fill your day.</p>
+          <p className="empty">
+            No events yet — connect Google and pull, or add from the inbox.
+          </p>
         ) : (
           events.map((event, i) => {
             const stack =

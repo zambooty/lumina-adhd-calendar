@@ -44,20 +44,20 @@ Pulled / scheduled items attach the default **ADHD reminder stack**; pet XP stil
 ## What’s in the app
 
 - **Calendar** — Upcoming events with vivid source colors and per-event reminder stack selection.
-- **Source inbox** — Google Calendar + Gmail (live or demo) plus mock Notes / Texts. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
+- **Source inbox** — Google Calendar + Gmail (live when secrets + OAuth). Mock Notes / Texts only when Google is not live. “Pull from sources” can **auto-add** high-confidence (≥90%) items.
 - **Reminder stacks** — Editable default templates (1d / 2h / 30m / 5m / leave-now and more).
 - **Companion pet (Blink)** — XP = events pulled + events scheduled.
-- **Persistence** — `localStorage` key `lumen_adhd_companion_v1`. **Reset demo** restores seeded data.
+- **Persistence** — `localStorage` key `lumen_adhd_companion_v2` (empty start; legacy v1 wiped once). **Reset** clears to empty — does not re-inject fake appointments.
 - **PWA-ready** — `manifest.webmanifest` + theme color.
 
 ## Connectors
 
 | Source   | Status                                              |
 |----------|-----------------------------------------------------|
-| Calendar | **Google Calendar** (OAuth) + demo fallback         |
-| Email    | **Gmail** (OAuth + appointment heuristics) + demo   |
-| Notes    | Mock sticky / brain-dump parsing                    |
-| Texts    | Mock SMS threads                                    |
+| Calendar | **Google Calendar** (OAuth); demo only if secrets unset |
+| Email    | **Gmail** (OAuth); demo only if secrets unset         |
+| Notes    | Mock only in demo mode; empty when Google is live   |
+| Texts    | Mock only in demo mode; empty when Google is live   |
 
 ## Android follow-up path
 

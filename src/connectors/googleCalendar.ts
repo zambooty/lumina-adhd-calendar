@@ -188,6 +188,13 @@ export const googleCalendarConnector: SourceConnector = {
     }
     const token = getGoogleAccessToken()
 
+    // Real Google configured: never inject demo calendar rows — connect or pull live.
+    if (config.configured && !config.demoMode && !token) {
+      return {
+        candidates: [],
+        emptyHint: 'Connect Google to pull real Calendar events.',
+      }
+    }
     if (!config.configured || config.demoMode || !token) {
       await delay(280)
       return { candidates: demoCalendarCandidates(), usedDemo: true }

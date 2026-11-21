@@ -1,6 +1,7 @@
 /**
  * Source connectors. Google Calendar + Gmail are live when secrets + OAuth
- * are present; otherwise they fall back to demo mocks. Notes/Texts stay mock.
+ * are present; otherwise they fall back to demo mocks. Notes/Texts stay mock
+ * only in demo mode — empty when Google is configured and connected.
  */
 import type { EventCandidate } from '../types'
 import type { ConnectorPullResult, SourceConnector } from './types'
@@ -26,6 +27,11 @@ export const notesConnector: SourceConnector = {
   accent: SOURCE_META.notes.accent,
   async listCandidates(): Promise<ConnectorPullResult> {
     await delay(220)
+    const config = await fetchGoogleConfig()
+    const live =
+      config.configured && !config.demoMode && Boolean(getGoogleAccessToken())
+    // Keep inbox clean during live Google testing — no mock Notes.
+    if (live) return { candidates: [] }
     return { candidates: demoNotesCandidates(), usedDemo: true }
   },
 }
@@ -36,6 +42,11 @@ export const textsConnector: SourceConnector = {
   accent: SOURCE_META.texts.accent,
   async listCandidates(): Promise<ConnectorPullResult> {
     await delay(190)
+    const config = await fetchGoogleConfig()
+    const live =
+      config.configured && !config.demoMode && Boolean(getGoogleAccessToken())
+    // Keep inbox clean during live Google testing — no mock Texts.
+    if (live) return { candidates: [] }
     return { candidates: demoTextsCandidates(), usedDemo: true }
   },
 }

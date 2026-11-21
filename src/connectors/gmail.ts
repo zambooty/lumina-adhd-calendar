@@ -181,6 +181,13 @@ export const gmailConnector: SourceConnector = {
     }
     const token = getGoogleAccessToken()
 
+    // Real Google configured: never inject demo Gmail rows — connect or pull live.
+    if (config.configured && !config.demoMode && !token) {
+      return {
+        candidates: [],
+        emptyHint: 'Connect Google to pull real Gmail appointments.',
+      }
+    }
     if (!config.configured || config.demoMode || !token) {
       await delay(340)
       return { candidates: demoEmailCandidates(), usedDemo: true }
