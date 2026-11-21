@@ -738,6 +738,18 @@ a {
   color: var(--coral);
 }
 
+.google-connect-hint.oauth-uri {
+  font-size: 0.72rem;
+  opacity: 0.72;
+  word-break: break-all;
+}
+
+.google-connect-hint.oauth-uri code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--accent-cyan, #7dd3fc);
+}
+
 .google-connect-hint.success {
   color: var(--cyan);
 }

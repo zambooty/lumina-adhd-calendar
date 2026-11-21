@@ -94,12 +94,20 @@ function attachGoogleApi(
         return
       }
 
+      const redirectUri = parsed.redirectUri?.trim()
+      if (!redirectUri) {
+        res.statusCode = 400
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'redirect_uri_required' }))
+        return
+      }
+
       const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()
       const params = new URLSearchParams({
         code: (parsed.code ?? '').trim(),
         client_id: env.clientId,
         client_secret: secret,
-        redirect_uri: parsed.redirectUri?.trim() || 'postmessage',
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       })
       try {
@@ -138,6 +146,101 @@ function attachGoogleApi(
         res.end(
           JSON.stringify({
             error: 'token_exchange_failed',
+            details: err instanceof Error ? err.message : 'unknown',
+          }),
+        )
+      }
+      return
+    }
+
+    if (url === '/api/google/refresh' && req.method === 'POST') {
+      const origin = req.headers.origin
+      const referer = req.headers.referer
+      const host = req.headers.host
+      const originHost = (() => {
+        try {
+          if (origin) return new URL(origin).host
+          if (referer) return new URL(referer).host
+          return null
+        } catch {
+          return null
+        }
+      })()
+      if (!host || !originHost || originHost !== host) {
+        res.statusCode = 403
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'forbidden_origin' }))
+        return
+      }
+
+      let parsed: { refreshToken?: string } = {}
+      try {
+        parsed = JSON.parse(await readBody(req)) as { refreshToken?: string }
+      } catch {
+        res.statusCode = 400
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'invalid_json' }))
+        return
+      }
+
+      const env = readGoogleEnv()
+      if (!env.configured || !env.clientId || !env.hasClientSecret) {
+        res.statusCode = 503
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'google_not_configured' }))
+        return
+      }
+
+      const refreshToken = parsed.refreshToken?.trim()
+      if (!refreshToken) {
+        res.statusCode = 400
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: 'refresh_token_required' }))
+        return
+      }
+
+      const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()
+      const params = new URLSearchParams({
+        client_id: env.clientId,
+        client_secret: secret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      })
+      try {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        })
+        const payload = (await tokenRes.json()) as Record<string, unknown>
+        res.statusCode = tokenRes.ok ? 200 : 502
+        res.setHeader('content-type', 'application/json')
+        res.setHeader('cache-control', 'private, no-store')
+        if (!tokenRes.ok) {
+          res.end(
+            JSON.stringify({
+              error: 'token_refresh_failed',
+              details: payload.error ?? tokenRes.statusText,
+            }),
+          )
+          return
+        }
+        res.end(
+          JSON.stringify({
+            accessToken: payload.access_token,
+            expiresIn: payload.expires_in,
+            scope: payload.scope,
+            tokenType: payload.token_type,
+          }),
+        )
+      } catch (err) {
+        res.statusCode = 502
+        res.setHeader('content-type', 'application/json')
+        res.end(
+          JSON.stringify({
+            error: 'token_refresh_failed',
             details: err instanceof Error ? err.message : 'unknown',
           }),
         )

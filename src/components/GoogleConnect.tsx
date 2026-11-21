@@ -4,8 +4,10 @@ import {
   clearGoogleToken,
   connectGoogle,
   consumeGoogleAuthFlash,
+  getOAuthRedirectUri,
   isGoogleConnected,
   prefersRedirectOAuth,
+  recommendedRedirectUris,
 } from '../lib/googleAuth'
 import {
   fetchGoogleConfig,
@@ -17,6 +19,9 @@ type Props = {
 }
 
 function flashMessage(flash: string): string {
+  if (flash.startsWith('missing_scopes:')) {
+    return 'Google connected without Calendar + Gmail access. Reconnect and allow both permissions.'
+  }
   switch (flash) {
     case 'connected':
       return ''
@@ -25,11 +30,15 @@ function flashMessage(flash: string): string {
       return 'Google access was denied.'
     case 'state_mismatch':
       return 'OAuth state mismatch — try Connect Google again.'
+    case 'redirect_uri_mismatch':
+      return `Google rejected redirect_uri. Register exactly: ${recommendedRedirectUris().join(' and ')}`
     case 'exchange_failed':
     case 'exchange_no_token':
       return 'Could not finish Google sign-in. Try again.'
     case 'token_exchange_failed':
-      return 'Google token exchange failed. Check OAuth redirect URI.'
+      return `Google token exchange failed. redirect_uri must be ${getOAuthRedirectUri()}`
+    case 'redirect_uri_required':
+      return 'Missing redirect_uri on token exchange — try Connect Google again.'
     case 'client_secret_missing':
       return 'Google client secret is not bound on the host.'
     default:
@@ -43,6 +52,7 @@ export function GoogleConnect({ onChange }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
+  const [redirectUri, setRedirectUri] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +62,7 @@ export function GoogleConnect({ onChange }: Props) {
       if (cancelled) return
       setConfig(cfg)
       setConnected(isGoogleConnected())
+      setRedirectUri(getOAuthRedirectUri())
       if (flash === 'connected') {
         setHint('Google connected — tap Pull from sources.')
         onChange?.()
@@ -71,8 +82,9 @@ export function GoogleConnect({ onChange }: Props) {
     setError(null)
     setHint(null)
     const result = await connectGoogle()
+    if (result.redirectUri) setRedirectUri(result.redirectUri)
     if (result.pendingRedirect) {
-      setHint('Redirecting to Google…')
+      setHint(`Redirecting to Google… (${result.redirectUri ?? getOAuthRedirectUri()})`)
       // Stay busy — page is navigating away.
       return
     }
@@ -88,7 +100,11 @@ export function GoogleConnect({ onChange }: Props) {
           ? 'Google access was denied.'
           : result.error === 'gis_unavailable'
             ? 'Google sign-in unavailable. Check network / popup blockers.'
-            : 'Could not connect to Google.',
+            : result.error === 'redirect_uri_mismatch'
+              ? flashMessage('redirect_uri_mismatch')
+              : result.error?.startsWith('missing_scopes:')
+                ? flashMessage(result.error)
+                : 'Could not connect to Google.',
       )
       return
     }
@@ -153,6 +169,11 @@ export function GoogleConnect({ onChange }: Props) {
       </div>
       {hint && !error && <p className="google-connect-hint success">{hint}</p>}
       {error && <p className="google-connect-error">{error}</p>}
+      {!demo && !connected && redirectUri && (
+        <p className="google-connect-hint oauth-uri" title="Exact redirect_uri the app sends">
+          OAuth redirect_uri: <code>{redirectUri}</code>
+        </p>
+      )}
     </motion.div>
   )
 }

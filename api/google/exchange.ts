@@ -57,9 +57,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const code = body.code?.trim()
-  const redirectUri = body.redirectUri?.trim() || 'postmessage'
   if (!code) {
     return Response.json({ error: 'code_required' }, { status: 400 })
+  }
+
+  // Must match the redirect_uri used in the auth request exactly.
+  // App sends window.location.origin (no trailing slash). Accept that form;
+  // never default to postmessage for redirect-based mobile exchange.
+  const redirectUri = body.redirectUri?.trim()
+  if (!redirectUri) {
+    return Response.json({ error: 'redirect_uri_required' }, { status: 400 })
   }
 
   const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()

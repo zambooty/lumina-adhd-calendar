@@ -23,6 +23,7 @@ export function readGoogleEnv(): GoogleEnvStatus {
   }
 }
 
+/** Must match src/lib/googleScopes.ts (duplicated — server must not import client). */
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
