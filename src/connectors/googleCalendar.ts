@@ -196,16 +196,19 @@ export const googleCalendarConnector: SourceConnector = {
   accent: SOURCE_META.calendar.accent,
   async listCandidates(): Promise<ConnectorPullResult> {
     const config = await fetchGoogleConfig()
-    // Renew expired access tokens before treating as demo.
+    // Soft-refresh only — never open Cap Custom Tabs / GIS from Pull.
     if (config.configured && !config.demoMode && !getGoogleAccessToken()) {
-      await ensureGoogleAccessToken()
+      await ensureGoogleAccessToken({ interactive: false })
     }
     const token = getGoogleAccessToken()
 
     // Real Google configured: never inject demo calendar rows — connect or pull live.
+    // Pull never opens OAuth; unsigned users must use Connect Google (Custom Tabs).
     if (config.configured && !config.demoMode && !token) {
       return {
         candidates: [],
+        error:
+          'Not signed in — open Menu → Google connect, then Connect Google. Pull does not use the phone’s system Google account alone.',
         emptyHint: 'Connect Google to pull real Calendar events.',
       }
     }

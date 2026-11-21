@@ -551,10 +551,59 @@ function buildGoogleAuthUrl(
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 }
 
+/** Cap Browser.open can hang forever on a stuck controller / raced opens. */
+const CAP_BROWSER_OPEN_TIMEOUT_MS = 8_000
+
+/** Serialize Cap Custom Tabs opens — parallel open() races the static listener. */
+let capBrowserOpenChain: Promise<unknown> = Promise.resolve()
+
+async function openCapCustomTab(
+  authUrl: string,
+): Promise<'opened' | 'timeout' | 'failed'> {
+  const run = async (): Promise<'opened' | 'timeout' | 'failed'> => {
+    try {
+      const { Browser } = await import('@capacitor/browser')
+      let timer: number | undefined
+      try {
+        await Promise.race([
+          Browser.open({ url: authUrl, presentationStyle: 'popover' }),
+          new Promise<never>((_, reject) => {
+            timer = window.setTimeout(
+              () => reject(new Error('cap_browser_open_timeout')),
+              CAP_BROWSER_OPEN_TIMEOUT_MS,
+            )
+          }),
+        ])
+        return 'opened'
+      } finally {
+        if (timer !== undefined) window.clearTimeout(timer)
+      }
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message === 'cap_browser_open_timeout'
+      ) {
+        return 'timeout'
+      }
+      return 'failed'
+    }
+  }
+
+  const next = capBrowserOpenChain.then(run, run)
+  capBrowserOpenChain = next.then(
+    () => undefined,
+    () => undefined,
+  )
+  return next
+}
+
 /**
  * Capacitor: open Google OAuth in Chrome Custom Tabs via @capacitor/browser.
  * When Google redirects to https://localhost/?code=…, Android routes back into
  * the Cap WebView (androidScheme https). Falls back to in-WebView assign.
+ *
+ * Never call this from Pull — only from explicit Connect Google. Parallel
+ * Browser.open from calendar+gmail Pull used to hang the spinner forever.
  */
 async function connectViaCapBrowser(
   clientId: string,
@@ -570,15 +619,16 @@ async function connectViaCapBrowser(
   sessionStorage.setItem(REDIRECT_URI_KEY, redirectUri)
   const authUrl = buildGoogleAuthUrl(clientId, scopes, redirectUri, state)
 
-  try {
-    const { Browser } = await import('@capacitor/browser')
-    await Browser.open({ url: authUrl, presentationStyle: 'popover' })
-    return { ok: false, pendingRedirect: true }
-  } catch {
-    // Plugin missing / failed — fall through to in-WebView navigation.
-    window.location.assign(authUrl)
+  const outcome = await openCapCustomTab(authUrl)
+  if (outcome === 'opened') {
     return { ok: false, pendingRedirect: true }
   }
+  if (outcome === 'timeout') {
+    return { ok: false, error: 'browser_open_timeout' }
+  }
+  // Plugin missing / failed — fall through to in-WebView navigation.
+  window.location.assign(authUrl)
+  return { ok: false, pendingRedirect: true }
 }
 
 /**
@@ -727,14 +777,30 @@ async function silentPopupToken(clientId: string, scopes: string): Promise<strin
   })
 }
 
+export type EnsureGoogleAccessOptions = {
+  /**
+   * When true, may open Cap Custom Tabs / GIS popup / redirect.
+   * Pull / connectors must leave this false (default) so unsigned users get a
+   * clear “Connect Google” message instead of an infinite spinner.
+   */
+  interactive?: boolean
+}
+
 /**
  * Ensure a fresh access token exists.
- * Tries: valid memory/session token → refresh_token exchange → silent GIS → interactive.
+ * Default (Pull): memory/session token → refresh_token → optional silent GIS.
+ * Never opens Cap Custom Tabs or a GIS consent UI unless `interactive: true`
+ * (Connect Google button only). Phone system Google account is never enough.
  */
-export async function ensureGoogleAccessToken(): Promise<string | null> {
+export async function ensureGoogleAccessToken(
+  options: EnsureGoogleAccessOptions = {},
+): Promise<string | null> {
+  const interactive = options.interactive === true
+
   const existing = getGoogleAccessToken()
   if (existing) {
     if (!hasStoredRequiredScopes()) {
+      if (!interactive) return null
       // Token present but missing calendar/gmail — force incremental reconnect.
       const result = await connectGoogle()
       if (!result.ok) return null
@@ -747,6 +813,7 @@ export async function ensureGoogleAccessToken(): Promise<string | null> {
   if (refreshed) return refreshed
 
   const config = await fetchGoogleConfig()
+  // Silent GIS only on desktop-ish surfaces — never in Cap / mobile redirect mode.
   if (config.configured && config.clientId && !prefersRedirectOAuth()) {
     const silent = await silentPopupToken(
       config.clientId,
@@ -754,6 +821,8 @@ export async function ensureGoogleAccessToken(): Promise<string | null> {
     )
     if (silent) return silent
   }
+
+  if (!interactive) return null
 
   const result = await connectGoogle()
   if (!result.ok) return null

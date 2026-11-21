@@ -71,7 +71,10 @@ export async function transcribeVoicemailAudio(
     }
   }
 
-  const googleAccessToken = await ensureGoogleAccessToken()
+  // Never open Cap Custom Tabs from voice import — user must Connect Google first.
+  const googleAccessToken = await ensureGoogleAccessToken({
+    interactive: false,
+  })
   if (!googleAccessToken) {
     return {
       ok: false,

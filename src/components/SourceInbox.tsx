@@ -93,7 +93,9 @@ export function SourceInbox({
       {pullStatus && (
         <p
           className={`pull-status ${
-            /fail|error|expired|missing/i.test(pullStatus)
+            /fail|error|expired|missing|not signed|connect google|sign-in|timed out/i.test(
+              pullStatus,
+            )
               ? 'pull-status-warn'
               : /skipped|collapsed|capped|0 new|no new/i.test(pullStatus)
                 ? 'pull-status-muted'
