@@ -55,10 +55,10 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 
 ## Current debug build (shipped)
 
-- Release: [`android-debug-2026-11-21-updates`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-updates)
-- `versionCode` **2** / `1.1.0-debug` — includes **AppUpdate** plugin
+- Release: [`android-debug-2026-11-24-1.1.1`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.1)
+- `versionCode` **3** / `1.1.1-debug` — includes **AppUpdate** plugin + SHA-256 verify
 - Manifest: `public/android-latest.json` (keep in sync on every publish)
-- First install of this APK (or newer) enables Menu → **Check for updates**. Older `versionCode` 1 builds still update via GitHub / Project media download.
+- First install of this APK (or newer) enables Menu → **Check for updates**. Older `versionCode` 1–2 builds still update via GitHub / in-app check.
 
 ## API
 

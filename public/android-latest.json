@@ -1,12 +1,12 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0-debug",
-  "tag": "android-debug-2026-11-21-updates",
+  "versionCode": 3,
+  "versionName": "1.1.1-debug",
+  "tag": "android-debug-2026-11-24-1.1.1",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21-updates/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-updates",
-  "sha256": "47e35625db81dcc9a138c5ca3768283765315ae7336028ac7db02f05c78814dd",
-  "publishedAt": "2026-11-21T16:13:06Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.1/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.1",
+  "sha256": "be920aff7794c1dff8c54814650127d697fd9988ab8f677dd44802648265bdd0",
+  "publishedAt": "2026-11-24T15:23:21Z",
   "channel": "debug",
-  "notes": "In-app GitHub updates (PR #27) — versionCode 2 + AppUpdate plugin. Built from main @ 13a066e. Public Releases — silent download needs no GITHUB_TOKEN."
+  "notes": "Android debug 1.1.1 (versionCode 3) — security hardenings + calendar Phase 1. Built from main @ 88e77a2. Public Releases — silent download needs no GITHUB_TOKEN."
 }
