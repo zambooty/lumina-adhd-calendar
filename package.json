@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "check:google-api": "npx --yes tsx scripts/check-origin-allowlist.mjs && npx --yes tsx scripts/check-google-token-security.mjs",
     "check:capture-api": "npx --yes tsx scripts/check-capture-security.mjs",
+    "check:security-lows": "npx --yes tsx scripts/check-security-lows.mjs",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",

@@ -162,8 +162,11 @@ assert.equal(
   assert.equal(unsealRefreshToken(sealed, 'other-secret'), null)
 }
 
-// Rate-limit key: last XFF hop; Origin ignored; platform IP preferred
+// Rate-limit key: last XFF hop; Origin ignored; platform IP only when opted in
 {
+  const prevTrust = process.env.TRUST_PLATFORM_IP_HEADERS
+  delete process.env.TRUST_PLATFORM_IP_HEADERS
+
   const spoofedFirst = new Request('https://example.com/api', {
     headers: {
       'x-forwarded-for': '1.2.3.4, 10.0.0.9',
@@ -182,7 +185,7 @@ assert.equal(
       origin: published,
     },
   })
-  const withRealIp = new Request('https://example.com/api', {
+  const spoofedRealIp = new Request('https://example.com/api', {
     headers: {
       'x-real-ip': '10.0.0.9',
       'x-forwarded-for': '1.2.3.4',
@@ -192,11 +195,43 @@ assert.equal(
   const a = clientKeyFromRequest(spoofedFirst)
   const b = clientKeyFromRequest(sameEdgeDifferentOrigin)
   const c = clientKeyFromRequest(alone)
-  const d = clientKeyFromRequest(withRealIp)
+  const d = clientKeyFromRequest(spoofedRealIp)
   assert.equal(a, b, 'last XFF hop + Origin must not split the bucket')
   assert.notEqual(a, c, 'different last XFF hop → different key')
-  assert.equal(a, d, 'x-real-ip should win over spoofable XFF prefix')
+  assert.equal(
+    c,
+    d,
+    'without TRUST_PLATFORM_IP_HEADERS, spoofed x-real-ip must be ignored',
+  )
   assert.equal(a.length, 32)
+
+  process.env.TRUST_PLATFORM_IP_HEADERS = 'x-real-ip'
+  const trusted = clientKeyFromRequest(spoofedRealIp)
+  assert.equal(
+    trusted,
+    a,
+    'opted-in x-real-ip should match last-hop key for that IP',
+  )
+  assert.notEqual(
+    trusted,
+    c,
+    'opted-in x-real-ip must not follow the spoofable XFF-only key',
+  )
+  assert.equal(
+    trusted,
+    clientKeyFromRequest(
+      new Request('https://example.com/api', {
+        headers: {
+          'x-real-ip': '10.0.0.9',
+          'x-forwarded-for': '9.9.9.9, 8.8.8.8',
+        },
+      }),
+    ),
+    'opted-in x-real-ip buckets by platform IP',
+  )
+
+  if (prevTrust === undefined) delete process.env.TRUST_PLATFORM_IP_HEADERS
+  else process.env.TRUST_PLATFORM_IP_HEADERS = prevTrust
 }
 
 // Rate limiter

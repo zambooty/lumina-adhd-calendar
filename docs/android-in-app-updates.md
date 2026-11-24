@@ -66,7 +66,7 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 | Route | Purpose |
 |-------|---------|
 | `GET /api/android/update` | Latest metadata + public download URL |
-| `GET /api/android/apk?tag=&asset=` | Optional proxy stream (public OK; token optional) |
+| `GET /api/android/apk?tag=&asset=` | 302 to public GitHub APK URL (no tag API fan-out) |
 | `GET /android-latest.json` | Static fallback manifest |
 
 ## Native plugin
