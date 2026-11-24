@@ -162,11 +162,17 @@ assert.equal(
   assert.equal(unsealRefreshToken(sealed, 'other-secret'), null)
 }
 
-// Rate-limit key uses last XFF hop (not client-spoofable first hop)
+// Rate-limit key: last XFF hop; Origin ignored; platform IP preferred
 {
-  const spoofed = new Request('https://example.com/api', {
+  const spoofedFirst = new Request('https://example.com/api', {
     headers: {
       'x-forwarded-for': '1.2.3.4, 10.0.0.9',
+      origin: 'https://evil.example',
+    },
+  })
+  const sameEdgeDifferentOrigin = new Request('https://example.com/api', {
+    headers: {
+      'x-forwarded-for': '9.9.9.9, 10.0.0.9',
       origin: published,
     },
   })
@@ -176,9 +182,20 @@ assert.equal(
       origin: published,
     },
   })
-  const a = clientKeyFromRequest(spoofed)
-  const b = clientKeyFromRequest(alone)
-  assert.notEqual(a, b)
+  const withRealIp = new Request('https://example.com/api', {
+    headers: {
+      'x-real-ip': '10.0.0.9',
+      'x-forwarded-for': '1.2.3.4',
+      origin: 'https://evil.example',
+    },
+  })
+  const a = clientKeyFromRequest(spoofedFirst)
+  const b = clientKeyFromRequest(sameEdgeDifferentOrigin)
+  const c = clientKeyFromRequest(alone)
+  const d = clientKeyFromRequest(withRealIp)
+  assert.equal(a, b, 'last XFF hop + Origin must not split the bucket')
+  assert.notEqual(a, c, 'different last XFF hop → different key')
+  assert.equal(a, d, 'x-real-ip should win over spoofable XFF prefix')
   assert.equal(a.length, 32)
 }
 

@@ -88,6 +88,15 @@ export function whisperSpendEnabled(whisperKeyBound: boolean): boolean {
   return whisperKeyBound && readTranscribeAllowlist().configured
 }
 
+/**
+ * Pre-auth IP budget — runs before Google tokeninfo so forged Bearer tokens
+ * cannot fan out unlimited upstream lookups.
+ */
+export function transcribePreAuthRateLimit(clientKey: string): RateLimitResult {
+  const max = envInt('CAPTURE_TRANSCRIBE_PREAUTH_PER_MIN', 12)
+  return takeRateLimit(`capture-transcribe-preauth:${clientKey}`, max, 60_000)
+}
+
 /** Transcribe: default 3 uploads / minute / Google subject (not spoofable IP). */
 export function transcribeCallerRateLimit(sub: string): RateLimitResult {
   const max = envInt('CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN', 3)
