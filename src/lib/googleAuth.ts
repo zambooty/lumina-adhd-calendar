@@ -356,6 +356,7 @@ async function refreshWithStoredToken(): Promise<string | null> {
     accessToken?: string
     expiresIn?: number
     scope?: string
+    refreshToken?: string
   }
   if (!payload.accessToken) return null
   writeStored({
@@ -365,7 +366,11 @@ async function refreshWithStoredToken(): Promise<string | null> {
       typeof payload.scope === 'string'
         ? payload.scope
         : getGoogleGrantedScopes() ?? undefined,
-    refreshToken,
+    // Prefer server-rotated sealed refresh (AES) over the blob we sent.
+    refreshToken:
+      typeof payload.refreshToken === 'string' && payload.refreshToken
+        ? payload.refreshToken
+        : refreshToken,
   })
   return payload.accessToken
 }

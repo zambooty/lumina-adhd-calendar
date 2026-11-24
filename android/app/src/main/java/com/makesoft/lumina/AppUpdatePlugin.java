@@ -22,6 +22,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
@@ -123,11 +124,27 @@ public class AppUpdatePlugin extends Plugin {
             call.resolve(err);
             return;
         }
-        if (!url.startsWith("https://")) {
+        final String downloadUrl = url.trim();
+        if (!isAllowedApkUrl(downloadUrl)) {
             JSObject err = new JSObject();
             err.put("ok", false);
-            err.put("error", "insecure_url");
-            err.put("hint", "APK URL must be https.");
+            err.put("error", "url_not_allowed");
+            err.put(
+                "hint",
+                "APK URL must be a LUMINA GitHub Release or the app APK proxy."
+            );
+            call.resolve(err);
+            return;
+        }
+        final String expectedSha = normalizeSha256(call.getString("sha256"));
+        if (expectedSha == null) {
+            JSObject err = new JSObject();
+            err.put("ok", false);
+            err.put("error", "sha256_required");
+            err.put(
+                "hint",
+                "Update metadata missing SHA-256 — open the GitHub release instead."
+            );
             call.resolve(err);
             return;
         }
@@ -140,9 +157,7 @@ public class AppUpdatePlugin extends Plugin {
             return;
         }
 
-        final String downloadUrl = url.trim();
         final String fileName = call.getString("fileName", "lumina-update.apk");
-        final String expectedSha = normalizeSha256(call.getString("sha256"));
         call.setKeepAlive(true);
 
         EXEC.execute(() -> {
@@ -161,7 +176,8 @@ public class AppUpdatePlugin extends Plugin {
 
                 URL target = new URL(downloadUrl);
                 conn = (HttpURLConnection) target.openConnection();
-                conn.setInstanceFollowRedirects(true);
+                // Manual redirect so we can re-check the allowlist on Location.
+                conn.setInstanceFollowRedirects(false);
                 conn.setConnectTimeout(30_000);
                 conn.setReadTimeout(120_000);
                 conn.setRequestProperty("Accept", "application/vnd.android.package-archive,*/*");
@@ -177,8 +193,16 @@ public class AppUpdatePlugin extends Plugin {
                         fail(call, "redirect_missing", "Download redirected without Location.");
                         return;
                     }
+                    if (!isAllowedApkUrl(loc)) {
+                        fail(
+                            call,
+                            "redirect_not_allowed",
+                            "Download redirected to a host that is not allowed."
+                        );
+                        return;
+                    }
                     conn = (HttpURLConnection) new URL(loc).openConnection();
-                    conn.setInstanceFollowRedirects(true);
+                    conn.setInstanceFollowRedirects(false);
                     conn.setConnectTimeout(30_000);
                     conn.setReadTimeout(120_000);
                     conn.setRequestProperty("Accept", "application/vnd.android.package-archive,*/*");
@@ -246,21 +270,22 @@ public class AppUpdatePlugin extends Plugin {
                 }
 
                 String actualSha = toHex(digest.digest());
-                if (expectedSha != null && !expectedSha.equals(actualSha)) {
-                    // Re-hash from disk as a second check before refusing install.
-                    String diskSha = sha256File(outFile);
-                    if (diskSha == null || !expectedSha.equals(diskSha)) {
-                        if (outFile.exists()) {
-                            //noinspection ResultOfMethodCallIgnored
-                            outFile.delete();
-                        }
-                        fail(
-                            call,
-                            "apk_hash_mismatch",
-                            "Downloaded APK failed integrity check — try again or open the GitHub release."
-                        );
-                        return;
+                String diskSha = sha256File(outFile);
+                if (
+                    !expectedSha.equals(actualSha) ||
+                    diskSha == null ||
+                    !expectedSha.equals(diskSha)
+                ) {
+                    if (outFile.exists()) {
+                        //noinspection ResultOfMethodCallIgnored
+                        outFile.delete();
                     }
+                    fail(
+                        call,
+                        "apk_hash_mismatch",
+                        "Downloaded APK failed integrity check — try again or open the GitHub release."
+                    );
+                    return;
                 }
 
                 JSObject install = installApkFile(outFile);
@@ -376,6 +401,53 @@ public class AppUpdatePlugin extends Plugin {
         String cleaned = raw.trim().toLowerCase().replace("sha256:", "");
         if (!cleaned.matches("[a-f0-9]{64}")) return null;
         return cleaned;
+    }
+
+    /**
+     * Only GitHub Release assets for this repo, or the published app's APK
+     * proxy / local Vite proxy — not arbitrary HTTPS hosts.
+     */
+    private static boolean isAllowedApkUrl(String raw) {
+        if (raw == null || raw.isEmpty()) return false;
+        try {
+            URI uri = new URI(raw.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || !scheme.equalsIgnoreCase("https")) return false;
+            String host = uri.getHost();
+            if (host == null) return false;
+            host = host.toLowerCase();
+            String path = uri.getPath() != null ? uri.getPath() : "";
+            if (
+                host.equals("github.com")
+                    && path.startsWith(
+                        "/zambooty/lumina-adhd-calendar/releases/download/"
+                    )
+            ) {
+                return path.toLowerCase().endsWith(".apk");
+            }
+            if (
+                host.endsWith(".apps.grok.bot")
+                    && path.startsWith("/api/android/apk")
+            ) {
+                return true;
+            }
+            if (
+                (host.equals("127.0.0.1") || host.equals("localhost"))
+                    && path.startsWith("/api/android/apk")
+            ) {
+                return true;
+            }
+            // Objects CDN for GitHub release assets after one redirect hop.
+            if (
+                host.equals("objects.githubusercontent.com")
+                    || host.endsWith(".githubusercontent.com")
+            ) {
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String toHex(byte[] bytes) {

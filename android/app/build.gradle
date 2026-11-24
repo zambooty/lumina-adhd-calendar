@@ -26,8 +26,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump on every published APK; in-app updater compares this to GitHub / android-latest.json
-        versionCode 4
-        versionName "1.1.2-debug"
+        versionCode 5
+        versionName "1.1.3-debug"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -7,6 +7,7 @@ import {
   rateLimitedResponse,
   refreshRateLimit,
   safeOAuthErrorCode,
+  sealRefreshToken,
   tokenSuccessBody,
   unsealRefreshToken,
 } from '../../server/googleTokenSecurity.js'
@@ -142,6 +143,9 @@ export async function POST(request: Request): Promise<Response> {
       { status: 502 },
     )
   }
+
+  // Always return a fresh AES-sealed blob so legacy HMAC seals migrate.
+  body.refreshToken = sealRefreshToken(refreshToken, secret)
 
   return jsonWithCors(request, body)
 }

@@ -278,10 +278,20 @@ export async function downloadAndInstallUpdate(
       }
     }
 
+    const sha256 = latest.sha256?.trim()
+    if (!sha256 || !/^[a-fA-F0-9]{64}$/.test(sha256)) {
+      return {
+        ok: false,
+        error: 'sha256_required',
+        hint:
+          'Update metadata missing SHA-256 — open the GitHub release and install manually.',
+      }
+    }
+
     const result = await AppUpdate.downloadAndInstall({
       url: latest.downloadUrl,
       fileName: latest.apkAsset || 'lumina-update.apk',
-      sha256: latest.sha256,
+      sha256,
     })
 
     if (

@@ -1,12 +1,12 @@
 {
-  "versionCode": 4,
-  "versionName": "1.1.2-debug",
-  "tag": "android-debug-2026-11-24-1.1.2",
+  "versionCode": 5,
+  "versionName": "1.1.3-debug",
+  "tag": "android-debug-2026-11-24-1.1.3",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.2/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.2",
-  "sha256": "c852cc612589a0991a6f4f140e2bdf0bee04bf5e4691441faee83b7101e3e44f",
-  "publishedAt": "2026-11-24T15:28:54Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.3/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.3",
+  "sha256": "65becce3efabd3c50e5b0afacfd387dfb8bc56fd8b02dec2d76de15b67742bcb",
+  "publishedAt": "2026-11-24T15:42:31Z",
   "channel": "debug",
-  "notes": "Android debug 1.1.2 (versionCode 4) — stable Cap debug signing for in-place updates. If package conflicts, uninstall once then install."
+  "notes": "Android debug 1.1.3 (versionCode 5) — APK URL allowlist + required SHA-256; web security hardenings."
 }
