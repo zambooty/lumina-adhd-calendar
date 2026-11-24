@@ -8,6 +8,8 @@
 export const ANDROID_UPDATE_OWNER = 'zambooty'
 export const ANDROID_UPDATE_REPO = 'lumina-adhd-calendar'
 export const ANDROID_TAG_PREFIXES = ['android-debug-', 'android-release-'] as const
+/** Match Cap AppUpdatePlugin MAX_APK_BYTES — hard stop for proxy streams. */
+export const MAX_APK_PROXY_BYTES = 80 * 1024 * 1024
 
 export type AndroidLatestManifest = {
   versionCode: number
@@ -343,6 +345,16 @@ export async function fetchGithubReleaseAsset(opts: {
     }
   }
 
+  const declaredSize = typeof withId.size === 'number' ? withId.size : null
+  if (declaredSize != null && declaredSize > MAX_APK_PROXY_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      error: 'apk_too_large',
+      hint: 'APK exceeds the proxy size limit.',
+    }
+  }
+
   // 1) Public browser URL (no auth) — preferred for silent Cap download via proxy too.
   if (withId.browser_download_url) {
     try {
@@ -356,8 +368,8 @@ export async function fetchGithubReleaseAsset(opts: {
       if (publicRes.ok) {
         return {
           ok: true,
-          body: publicRes.body,
-          size: withId.size ?? null,
+          body: limitApkStream(publicRes.body),
+          size: declaredSize,
           contentType: 'application/vnd.android.package-archive',
           filename: withId.name,
         }
@@ -395,11 +407,31 @@ export async function fetchGithubReleaseAsset(opts: {
 
   return {
     ok: true,
-    body: apkRes.body,
-    size: withId.size ?? null,
+    body: limitApkStream(apkRes.body),
+    size: declaredSize,
     contentType: 'application/vnd.android.package-archive',
     filename: withId.name,
   }
+}
+
+/** Abort the proxy body once it exceeds MAX_APK_PROXY_BYTES. */
+function limitApkStream(
+  body: ReadableStream<Uint8Array> | null,
+): ReadableStream<Uint8Array> | null {
+  if (!body) return null
+  let total = 0
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength
+        if (total > MAX_APK_PROXY_BYTES) {
+          controller.error(new Error('apk_too_large'))
+          return
+        }
+        controller.enqueue(chunk)
+      },
+    }),
+  )
 }
 
 /** Exposed for tests / callers that need the proxy path explicitly. */

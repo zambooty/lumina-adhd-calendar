@@ -8,6 +8,7 @@ import {
   refreshRateLimit,
   safeOAuthErrorCode,
   tokenSuccessBody,
+  unsealRefreshToken,
 } from '../../server/googleTokenSecurity.js'
 import {
   corsPreflightResponse,
@@ -75,10 +76,24 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const secret = (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()
+  // Only accept refresh tokens this app sealed after /exchange — blocks using
+  // this route as an open proxy for arbitrary Google refresh tokens.
+  const refreshToken = unsealRefreshToken(parsed.refreshToken, secret)
+  if (!refreshToken) {
+    return jsonWithCors(
+      request,
+      {
+        error: 'reconnect_required',
+        hint: 'Connect Google again — stored refresh is missing or not issued by this app.',
+      },
+      { status: 401 },
+    )
+  }
+
   const params = new URLSearchParams({
     client_id: env.clientId,
     client_secret: secret,
-    refresh_token: parsed.refreshToken,
+    refresh_token: refreshToken,
     grant_type: 'refresh_token',
   })
 

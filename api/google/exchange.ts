@@ -132,7 +132,10 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
-  const body = tokenSuccessBody(payload, { includeRefresh: true })
+  const body = tokenSuccessBody(payload, {
+    includeRefresh: true,
+    sealSecret: secret,
+  })
   if (typeof body.accessToken !== 'string' || !body.accessToken) {
     return jsonWithCors(
       request,

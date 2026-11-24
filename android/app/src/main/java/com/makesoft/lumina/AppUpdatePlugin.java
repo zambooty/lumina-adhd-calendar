@@ -18,10 +18,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -140,6 +142,7 @@ public class AppUpdatePlugin extends Plugin {
 
         final String downloadUrl = url.trim();
         final String fileName = call.getString("fileName", "lumina-update.apk");
+        final String expectedSha = normalizeSha256(call.getString("sha256"));
         call.setKeepAlive(true);
 
         EXEC.execute(() -> {
@@ -205,6 +208,7 @@ public class AppUpdatePlugin extends Plugin {
                     return;
                 }
 
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 try (
                     InputStream in = new BufferedInputStream(conn.getInputStream());
                     FileOutputStream out = new FileOutputStream(outFile)
@@ -220,6 +224,7 @@ public class AppUpdatePlugin extends Plugin {
                             return;
                         }
                         out.write(buf, 0, n);
+                        digest.update(buf, 0, n);
                         if (contentLength > 0) {
                             int pct = (int) Math.min(100, (total * 100) / contentLength);
                             if (pct != lastPct && (pct == 100 || pct - lastPct >= 2)) {
@@ -238,6 +243,24 @@ public class AppUpdatePlugin extends Plugin {
                 if (outFile.length() < 1024) {
                     fail(call, "apk_too_small", "Downloaded file does not look like an APK.");
                     return;
+                }
+
+                String actualSha = toHex(digest.digest());
+                if (expectedSha != null && !expectedSha.equals(actualSha)) {
+                    // Re-hash from disk as a second check before refusing install.
+                    String diskSha = sha256File(outFile);
+                    if (diskSha == null || !expectedSha.equals(diskSha)) {
+                        if (outFile.exists()) {
+                            //noinspection ResultOfMethodCallIgnored
+                            outFile.delete();
+                        }
+                        fail(
+                            call,
+                            "apk_hash_mismatch",
+                            "Downloaded APK failed integrity check — try again or open the GitHub release."
+                        );
+                        return;
+                    }
                 }
 
                 JSObject install = installApkFile(outFile);
@@ -346,5 +369,36 @@ public class AppUpdatePlugin extends Plugin {
             cleaned = cleaned.substring(0, 76) + ".apk";
         }
         return cleaned;
+    }
+
+    private static String normalizeSha256(String raw) {
+        if (raw == null) return null;
+        String cleaned = raw.trim().toLowerCase().replace("sha256:", "");
+        if (!cleaned.matches("[a-f0-9]{64}")) return null;
+        return cleaned;
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    private static String sha256File(File file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream in = new BufferedInputStream(new FileInputStream(file))) {
+                byte[] buf = new byte[16 * 1024];
+                int n;
+                while ((n = in.read(buf)) >= 0) {
+                    digest.update(buf, 0, n);
+                }
+            }
+            return toHex(digest.digest());
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

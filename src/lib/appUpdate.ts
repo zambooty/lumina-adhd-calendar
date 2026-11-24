@@ -37,6 +37,8 @@ export type AppUpdatePlugin = {
   downloadAndInstall(options: {
     url: string
     fileName?: string
+    /** Expected SHA-256 hex (optional; verified before install when present). */
+    sha256?: string
   }): Promise<DownloadInstallResult>
   installDownloadedApk(options: {
     path: string
@@ -279,6 +281,7 @@ export async function downloadAndInstallUpdate(
     const result = await AppUpdate.downloadAndInstall({
       url: latest.downloadUrl,
       fileName: latest.apkAsset || 'lumina-update.apk',
+      sha256: latest.sha256,
     })
 
     if (
