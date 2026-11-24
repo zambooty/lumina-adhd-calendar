@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import type {
   CalendarEntryKind,
   CalendarEvent,
+  DailyTodo,
   PetState,
   ReminderStack,
+  TodoRepeat,
 } from '../types'
 import { formatLeaveIn } from '../lib/duration'
 import { safeFormatIso } from '../lib/safeDate'
@@ -15,13 +17,16 @@ import {
   pickNowEvent,
   stackArmed,
 } from '../lib/mixFocus'
+import { dayKey, todosForDay } from '../lib/dailyTodos'
 import { CalendarView } from './CalendarView'
 import { UpcomingList } from './UpcomingList'
+import { DailyTodoList } from './DailyTodoList'
 
 type Props = {
   events: CalendarEvent[]
   stacks: ReminderStack[]
   pet: PetState
+  dailyTodos?: DailyTodo[]
   onChangeStack: (eventId: string, stackId: string) => void
   onChangeCategory?: (eventId: string, categoryId: string) => void
   onAddEntry?: (input: {
@@ -35,18 +40,35 @@ type Props = {
   focusEventId?: string | null
   onFocusConsumed?: () => void
   onOpenEvent?: (id: string) => void
+  onEnsureDayTodos?: (dateKey: string) => void
+  onAddDailyTodo?: (input: {
+    title: string
+    date?: string
+    repeat?: TodoRepeat
+  }) => void
+  onToggleDailyTodo?: (todoId: string) => void
+  onRemoveDailyTodo?: (todoId: string) => void
+  onSetTodoRepeat?: (todoId: string, repeat: TodoRepeat) => void
+  onOpenAgenda?: () => void
 }
 
 export function MixHome({
   events,
   stacks,
   pet,
+  dailyTodos = [],
   onChangeStack,
   onChangeCategory,
   onAddEntry,
   focusEventId,
   onFocusConsumed,
   onOpenEvent,
+  onEnsureDayTodos,
+  onAddDailyTodo,
+  onToggleDailyTodo,
+  onRemoveDailyTodo,
+  onSetTodoRepeat,
+  onOpenAgenda,
 }: Props) {
   const [now, setNow] = useState(() => new Date())
 
@@ -74,6 +96,13 @@ export function MixHome({
   }
 
   const leaveCopy = leaveMins == null ? null : formatLeaveIn(leaveMins)
+  const todayTodos = todosForDay(dailyTodos, dayKey())
+  const todayDone = todayTodos.filter((t) => t.done).length
+  const showDaily =
+    onAddDailyTodo &&
+    onToggleDailyTodo &&
+    onRemoveDailyTodo &&
+    onSetTodoRepeat
 
   return (
     <div className="mix-home">
@@ -169,6 +198,47 @@ export function MixHome({
             />
           </div>
         </section>
+
+        {showDaily && (
+          <section
+            className="mix-glass mix-daily"
+            aria-label="Today’s todos"
+          >
+            <div className="mix-daily-head">
+              <div>
+                <h2 className="mix-rail-title">Today&apos;s todos</h2>
+                <p className="mix-rail-hint">
+                  {todayTodos.length === 0
+                    ? 'Quick wins for today — pull from task groups in the menu.'
+                    : `${todayDone} of ${todayTodos.length} done`}
+                </p>
+              </div>
+              {onOpenAgenda && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={onOpenAgenda}
+                >
+                  Agenda
+                </button>
+              )}
+            </div>
+            <DailyTodoList
+              todos={dailyTodos}
+              compact
+              onEnsureDay={onEnsureDayTodos}
+              onAdd={onAddDailyTodo}
+              onToggle={onToggleDailyTodo}
+              onRemove={onRemoveDailyTodo}
+              onSetRepeat={onSetTodoRepeat}
+            />
+            {todayTodos.length === 0 && (
+              <p className="mix-rail-empty">
+                Open menu → Daily todos or Task groups to start.
+              </p>
+            )}
+          </section>
+        )}
 
         <div className="mix-whisper mix-whisper--mobile" aria-live="polite">
           <span className="mix-whisper-orb" aria-hidden />

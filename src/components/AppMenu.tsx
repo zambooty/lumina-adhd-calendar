@@ -1,9 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import type { ReactNode } from 'react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 export type MenuSectionId =
   | 'inbox'
+  | 'todos'
+  | 'groups'
+  | 'agenda'
   | 'google'
   | 'reminders'
   | 'blink'
@@ -23,22 +26,48 @@ type Props = {
   sections: Section[]
   footer?: ReactNode
   inboxCount?: number
+  /** Open directly into a section (e.g. agenda from home). */
+  initialSection?: MenuSectionId | null
 }
 
-export function AppMenu({ open, onClose, sections, footer }: Props) {
+export function AppMenu({
+  open,
+  onClose,
+  sections,
+  footer,
+  initialSection = null,
+}: Props) {
   const titleId = useId()
   const [active, setActive] = useState<MenuSectionId | null>(null)
+  const activeRef = useRef<MenuSectionId | null>(null)
+  const appliedInitialRef = useRef(false)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   useEffect(() => {
     if (!open) {
       setActive(null)
+      appliedInitialRef.current = false
       return
     }
+    if (
+      !appliedInitialRef.current &&
+      initialSection &&
+      sections.some((s) => s.id === initialSection)
+    ) {
+      setActive(initialSection)
+      appliedInitialRef.current = true
+    }
+  }, [open, initialSection, sections])
+
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (active) setActive(null)
-        else onClose()
-      }
+      if (e.key !== 'Escape') return
+      if (activeRef.current) setActive(null)
+      else onClose()
     }
     window.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
@@ -47,7 +76,7 @@ export function AppMenu({ open, onClose, sections, footer }: Props) {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
-  }, [open, onClose, active])
+  }, [open, onClose])
 
   useEffect(() => {
     if (open && active && !sections.some((s) => s.id === active)) {

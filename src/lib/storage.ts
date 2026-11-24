@@ -2,6 +2,7 @@ import type { AppState, ReminderStack } from '../types'
 import { AUTO_REMINDER_PRESETS } from './reminders'
 import { createEmptyState } from './seed'
 import { dismissKeysFor, rememberDismissed } from './pullFilter'
+import { ensureTaskGroups } from './taskGroups'
 
 /** v2 drops auto-seeded demo appointments so live Google tests start clean. */
 const KEY = 'lumen_adhd_companion_v2'
@@ -40,6 +41,9 @@ function normalizeState(raw: AppState): AppState {
       Array.isArray(raw.dismissedKeys) ? raw.dismissedKeys : [],
       fromStatus,
     ),
+    taskGroups: ensureTaskGroups(raw.taskGroups),
+    todoTemplates: Array.isArray(raw.todoTemplates) ? raw.todoTemplates : [],
+    dailyTodos: Array.isArray(raw.dailyTodos) ? raw.dailyTodos : [],
   }
 }
 
