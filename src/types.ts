@@ -68,9 +68,20 @@ export type PetStage = 'egg' | 'hatchling' | 'cub' | 'glowfox' | 'legend'
 
 export type PetState = {
   name: string
+  /** XP from Pull / inbox imports. */
   eventsPulled: number
+  /** XP from scheduling candidates / manual calendar adds. */
   eventsScheduled: number
+  /** XP from completing daily todos or calendar events. */
+  tasksCompleted: number
+  /** XP from journal saves. */
+  journalsLogged: number
+  /** XP from feeling / energy check-ins. */
+  moodsLogged: number
   lastReactedAt?: string
+  /** Last auto-speech line on the pet screen. */
+  lastSpeech?: string
+  lastSpokeAt?: string
 }
 
 /** Shop categories for companion cosmetics + pet-for-pet. */

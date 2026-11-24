@@ -7,6 +7,8 @@ import { SourceInbox } from './components/SourceInbox'
 import { AutoRemindersPanel } from './components/AutoRemindersPanel'
 import { GoogleConnect } from './components/GoogleConnect'
 import { BlinkHeaderPet } from './components/BlinkHeaderPet'
+import { FloatingPetButton } from './components/FloatingPetButton'
+import { PetScreen } from './components/PetScreen'
 import { AppMenu } from './components/AppMenu'
 import { DailyTodoList } from './components/DailyTodoList'
 import { TaskGroupsPanel } from './components/TaskGroupsPanel'
@@ -66,6 +68,7 @@ export default function App() {
     addManualEntry,
     toggleAutoAdd,
     petReact,
+    petSpeak,
     hardReset,
     notifyCaptureImported,
     ensureDayTodos,
@@ -87,6 +90,7 @@ export default function App() {
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [petScreenOpen, setPetScreenOpen] = useState(false)
   const [menuFocusSection, setMenuFocusSection] = useState<
     | 'todos'
     | 'groups'
@@ -140,6 +144,11 @@ export default function App() {
     setMenuFocusSection('store')
     setMenuOpen(true)
   }, [dismissPetStorePrompts])
+  const openPetScreen = useCallback(() => {
+    setMenuOpen(false)
+    setPetScreenOpen(true)
+  }, [])
+  const closePetScreen = useCallback(() => setPetScreenOpen(false), [])
 
   const runUpdateCheck = useCallback(async (opts?: { forceSheet?: boolean }) => {
     if (!isAndroidNative()) return
@@ -463,9 +472,16 @@ export default function App() {
       {
         id: 'blink' as const,
         title: 'Blink',
-        hint: 'Companion grows from pulls + schedules',
+        hint: 'Floating pet · grows from pulls, tasks, journal & moods',
         accent: 'amber' as const,
-        children: <CompanionPet pet={state.pet} onReact={petReact} />,
+        children: (
+          <CompanionPet
+            pet={state.pet}
+            onReact={petReact}
+            onSpeak={petSpeak}
+            onOpenScreen={openPetScreen}
+          />
+        ),
       },
       {
         id: 'store' as const,
@@ -520,6 +536,8 @@ export default function App() {
       petReact,
       buyPetStoreItem,
       equipPetStoreItem,
+      petSpeak,
+      openPetScreen,
       openPullSheet,
       ensureDayTodos,
       addDailyTodo,
@@ -561,7 +579,7 @@ export default function App() {
       {!menuOpen && (
         <header className="topbar topbar--calendar topbar--mix">
           <div className="topbar-brand-row">
-            <BlinkHeaderPet pet={state.pet} onReact={petReact} />
+            <BlinkHeaderPet pet={state.pet} onOpen={openPetScreen} />
             <div>
               <div className="brand-mark">LUMINA</div>
               <div className="brand-sub">
@@ -708,7 +726,7 @@ export default function App() {
         onCheckAgain={() => void runUpdateCheck({ forceSheet: true })}
       />
 
-      {storePromptOpen && newStoreItems.length > 0 && !menuOpen && (
+      {storePromptOpen && newStoreItems.length > 0 && !menuOpen && !petScreenOpen && (
         <PetStorePrompt
           items={newStoreItems}
           spark={petStore.spark}
@@ -719,6 +737,20 @@ export default function App() {
           }}
         />
       )}
+
+      <FloatingPetButton
+        pet={state.pet}
+        onOpen={openPetScreen}
+        hidden={menuOpen || petScreenOpen || pullSheetOpen || leaveMomentOpen || storePromptOpen}
+      />
+
+      <PetScreen
+        open={petScreenOpen}
+        pet={state.pet}
+        onClose={closePetScreen}
+        onReact={petReact}
+        onSpeak={petSpeak}
+      />
 
       <AnimatePresence>
         {toast && toast !== 'Opened from reminder' && (
