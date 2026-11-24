@@ -1,6 +1,7 @@
 /**
  * ND-friendly task color categories for the dark glass calendar.
  * High luminance accents on dark backgrounds — not decorative pastels.
+ * Shared with task groups / daily todos so Phase 2 colors stay in sync.
  */
 
 export type TaskCategoryId =

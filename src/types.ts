@@ -71,6 +71,56 @@ export type PetState = {
   lastReactedAt?: string
 }
 
+/** How often a daily todo / template should reappear. */
+export type TodoRepeat = 'none' | 'daily' | 'weekdays' | 'weekly'
+
+/** Repeatable definition that materializes into DailyTodo rows per day. */
+export type TodoTemplate = {
+  id: string
+  title: string
+  color: string
+  groupId?: string
+  /** Calendar category id when shared with #30 colors. */
+  categoryId?: string
+  repeat: Exclude<TodoRepeat, 'none'>
+  /** For weekly: 0=Sun … 6=Sat */
+  repeatWeekday?: number
+  active: boolean
+  createdAt: string
+}
+
+/** One checkbox row on a specific local calendar day. */
+export type DailyTodo = {
+  id: string
+  title: string
+  /** Local day key yyyy-MM-dd */
+  date: string
+  done: boolean
+  doneAt?: string
+  color: string
+  groupId?: string
+  templateId?: string
+  repeat: TodoRepeat
+  repeatWeekday?: number
+  createdAt: string
+}
+
+export type TaskGroupItem = {
+  id: string
+  title: string
+  color: string
+  defaultRepeat: TodoRepeat
+}
+
+export type TaskGroup = {
+  id: string
+  label: string
+  color: string
+  /** Aligns with calendar task category colors when present. */
+  categoryId?: string
+  items: TaskGroupItem[]
+}
+
 export type AppState = {
   events: CalendarEvent[]
   candidates: EventCandidate[]
@@ -85,6 +135,12 @@ export type AppState = {
    * Persisted via localStorage with the rest of app state; Pull skips them.
    */
   dismissedKeys: string[]
+  /** Seeded + user task groups (health, hygiene, …). */
+  taskGroups: TaskGroup[]
+  /** Active repeatable todo templates. */
+  todoTemplates: TodoTemplate[]
+  /** Per-day todo instances (including one-offs). */
+  dailyTodos: DailyTodo[]
 }
 
 export type { SourceConnector, ConnectorPullResult } from './connectors/types'

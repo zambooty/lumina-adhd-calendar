@@ -8,10 +8,14 @@ import { AutoRemindersPanel } from './components/AutoRemindersPanel'
 import { GoogleConnect } from './components/GoogleConnect'
 import { BlinkHeaderPet } from './components/BlinkHeaderPet'
 import { AppMenu } from './components/AppMenu'
+import { DailyTodoList } from './components/DailyTodoList'
+import { TaskGroupsPanel } from './components/TaskGroupsPanel'
+import { AgendaView } from './components/AgendaView'
 import { PullDecisionSheet } from './components/PullDecisionSheet'
 import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { UpdateAvailableSheet } from './components/UpdateAvailableSheet'
 import { useAppState } from './hooks/useAppState'
+import { dayKey } from './lib/dailyTodos'
 import { isAndroidNative } from './lib/platform'
 import {
   checkForAppUpdate,
@@ -50,9 +54,19 @@ export default function App() {
     petReact,
     hardReset,
     notifyCaptureImported,
+    ensureDayTodos,
+    addDailyTodo,
+    toggleDailyTodo,
+    removeDailyTodo,
+    setTodoRepeat,
+    pullGroupItemToDaily,
+    pullGroupItemToCalendar,
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuFocusSection, setMenuFocusSection] = useState<
+    'todos' | 'groups' | 'agenda' | null
+  >(null)
   const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
   const [pullSheetOpen, setPullSheetOpen] = useState(false)
   const [leaveMomentOpen, setLeaveMomentOpen] = useState(false)
@@ -71,11 +85,18 @@ export default function App() {
   )
   const activeFocusId = uiFocusEventId ?? focusEventId
 
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false)
+    setMenuFocusSection(null)
+  }, [])
   const openMenu = useCallback(() => setMenuOpen(true), [])
   const openPullSheet = useCallback(() => {
     setMenuOpen(false)
     setPullSheetOpen(true)
+  }, [])
+  const openAgendaMenu = useCallback(() => {
+    setMenuFocusSection('agenda')
+    setMenuOpen(true)
   }, [])
 
   const runUpdateCheck = useCallback(async (opts?: { forceSheet?: boolean }) => {
@@ -204,6 +225,12 @@ export default function App() {
     await pullSources()
   }, [pullSources])
 
+  const todayTodoCount = useMemo(() => {
+    const key = dayKey()
+    return (state.dailyTodos ?? []).filter((t) => t.date === key && !t.done)
+      .length
+  }, [state.dailyTodos])
+
   const menuSections = useMemo(
     () => [
       {
@@ -229,6 +256,56 @@ export default function App() {
             onToggleAutoAdd={toggleAutoAdd}
             onCaptureImported={({ added }) => notifyCaptureImported(added)}
             onOpenPullSheet={openPullSheet}
+          />
+        ),
+      },
+      {
+        id: 'todos' as const,
+        title: 'Daily todos',
+        hint: 'Today’s list · repeatable tasks',
+        accent: 'cyan' as const,
+        badge:
+          todayTodoCount > 0 ? (
+            <span className="section-badge">{todayTodoCount} open</span>
+          ) : undefined,
+        children: (
+          <DailyTodoList
+            todos={state.dailyTodos ?? []}
+            onEnsureDay={ensureDayTodos}
+            onAdd={addDailyTodo}
+            onToggle={toggleDailyTodo}
+            onRemove={removeDailyTodo}
+            onSetRepeat={setTodoRepeat}
+          />
+        ),
+      },
+      {
+        id: 'groups' as const,
+        title: 'Task groups',
+        hint: 'Health, hygiene, fitness + more → daily or calendar',
+        accent: 'sky' as const,
+        children: (
+          <TaskGroupsPanel
+            groups={state.taskGroups ?? []}
+            onPullToDaily={pullGroupItemToDaily}
+            onPullToCalendar={pullGroupItemToCalendar}
+          />
+        ),
+      },
+      {
+        id: 'agenda' as const,
+        title: 'Agenda & review',
+        hint: 'Day agenda + monthly task check-in',
+        accent: 'lime' as const,
+        children: (
+          <AgendaView
+            todos={state.dailyTodos ?? []}
+            events={state.events}
+            onEnsureDay={ensureDayTodos}
+            onAdd={addDailyTodo}
+            onToggle={toggleDailyTodo}
+            onRemove={removeDailyTodo}
+            onSetRepeat={setTodoRepeat}
           />
         ),
       },
@@ -263,12 +340,16 @@ export default function App() {
     ],
     [
       inboxCount,
+      todayTodoCount,
       pendingCandidates,
       pulling,
       state.autoAddHighConfidence,
       state.stacks,
       state.defaultStackId,
       state.pet,
+      state.dailyTodos,
+      state.taskGroups,
+      state.events,
       pullStatus,
       pullSources,
       scheduleCandidate,
@@ -279,6 +360,13 @@ export default function App() {
       updateStack,
       petReact,
       openPullSheet,
+      ensureDayTodos,
+      addDailyTodo,
+      toggleDailyTodo,
+      removeDailyTodo,
+      setTodoRepeat,
+      pullGroupItemToDaily,
+      pullGroupItemToCalendar,
     ],
   )
 
@@ -345,6 +433,7 @@ export default function App() {
           events={upcomingEvents}
           stacks={state.stacks}
           pet={state.pet}
+          dailyTodos={state.dailyTodos ?? []}
           onChangeStack={setEventStack}
           onChangeCategory={setEventCategory}
           onAddEntry={addManualEntry}
@@ -354,6 +443,12 @@ export default function App() {
             clearFocusEvent()
           }}
           onOpenEvent={(id) => setUiFocusEventId(id)}
+          onEnsureDayTodos={ensureDayTodos}
+          onAddDailyTodo={addDailyTodo}
+          onToggleDailyTodo={toggleDailyTodo}
+          onRemoveDailyTodo={removeDailyTodo}
+          onSetTodoRepeat={setTodoRepeat}
+          onOpenAgenda={openAgendaMenu}
         />
       </main>
 
@@ -361,6 +456,7 @@ export default function App() {
         open={menuOpen}
         onClose={closeMenu}
         sections={menuSections}
+        initialSection={menuFocusSection}
         footer={
           <>
             {isAndroidNative() && (

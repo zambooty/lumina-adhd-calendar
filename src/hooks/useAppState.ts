@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { addMinutes, getDay, setHours, setMinutes } from 'date-fns'
 import type {
   AppState,
   CalendarEntryKind,
   CalendarEvent,
+  DailyTodo,
   EventCandidate,
   ReminderOffset,
   ReminderStack,
+  TaskGroupItem,
+  TodoRepeat,
+  TodoTemplate,
 } from '../types'
 import { categoryById, DEFAULT_CATEGORY_ID } from '../lib/taskCategories'
 import { loadState, resetState, saveState } from '../lib/storage'
@@ -27,6 +32,11 @@ import {
 } from '../lib/localNotifications'
 import { drainShareTargetOnLaunch } from '../lib/nativeCapture'
 import { isNativeCapacitor } from '../lib/platform'
+import {
+  dayKey,
+  materializeTemplates,
+  parseDayKey,
+} from '../lib/dailyTodos'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
@@ -38,6 +48,25 @@ export function useAppState() {
   useEffect(() => {
     saveState(state)
   }, [state])
+
+  // Materialize repeating templates for today (and keep list fresh across midnight).
+  useEffect(() => {
+    const sync = () => {
+      const key = dayKey()
+      setState((s) => {
+        const spawned = materializeTemplates(
+          s.todoTemplates ?? [],
+          s.dailyTodos ?? [],
+          key,
+        )
+        if (!spawned.length) return s
+        return { ...s, dailyTodos: [...(s.dailyTodos ?? []), ...spawned] }
+      })
+    }
+    sync()
+    const id = window.setInterval(sync, 60_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (!toast) return
@@ -464,6 +493,234 @@ export function useAppState() {
 
   const clearFocusEvent = useCallback(() => setFocusEventId(null), [])
 
+  const ensureDayTodos = useCallback((dateKey?: string) => {
+    const key = dateKey ?? dayKey()
+    setState((s) => {
+      const spawned = materializeTemplates(
+        s.todoTemplates ?? [],
+        s.dailyTodos ?? [],
+        key,
+      )
+      if (!spawned.length) return s
+      return { ...s, dailyTodos: [...(s.dailyTodos ?? []), ...spawned] }
+    })
+  }, [])
+
+  const addDailyTodo = useCallback(
+    (input: {
+      title: string
+      date?: string
+      color?: string
+      groupId?: string
+      repeat?: TodoRepeat
+      repeatWeekday?: number
+    }) => {
+      const title = input.title.trim()
+      if (!title) return
+      const date = input.date ?? dayKey()
+      const color = input.color ?? categoryById('admin').color
+      const repeat = input.repeat ?? 'none'
+      const weekday = input.repeatWeekday ?? getDay(parseDayKey(date))
+      const now = new Date().toISOString()
+
+      setState((s) => {
+        let templates = s.todoTemplates ?? []
+        let templateId: string | undefined
+        if (repeat !== 'none') {
+          const tpl: TodoTemplate = {
+            id: uid('ttpl'),
+            title,
+            color,
+            groupId: input.groupId,
+            repeat,
+            repeatWeekday: repeat === 'weekly' ? weekday : undefined,
+            active: true,
+            createdAt: now,
+          }
+          templates = [...templates, tpl]
+          templateId = tpl.id
+        }
+        const todo: DailyTodo = {
+          id: uid('todo'),
+          title,
+          date,
+          done: false,
+          color,
+          groupId: input.groupId,
+          templateId,
+          repeat,
+          repeatWeekday: repeat === 'weekly' ? weekday : undefined,
+          createdAt: now,
+        }
+        return {
+          ...s,
+          todoTemplates: templates,
+          dailyTodos: [...(s.dailyTodos ?? []), todo],
+        }
+      })
+      flash(repeat === 'none' ? 'Added to today' : `Added · repeats ${repeat}`)
+    },
+    [flash],
+  )
+
+  const toggleDailyTodo = useCallback((todoId: string) => {
+    setState((s) => ({
+      ...s,
+      dailyTodos: (s.dailyTodos ?? []).map((t) => {
+        if (t.id !== todoId) return t
+        const done = !t.done
+        return {
+          ...t,
+          done,
+          doneAt: done ? new Date().toISOString() : undefined,
+        }
+      }),
+      pet: (() => {
+        const t = (s.dailyTodos ?? []).find((x) => x.id === todoId)
+        if (!t || t.done) return s.pet
+        // Completing (not un-completing) nudges pet XP via scheduled counter lightly
+        return {
+          ...s.pet,
+          eventsScheduled: s.pet.eventsScheduled + 1,
+          lastReactedAt: new Date().toISOString(),
+        }
+      })(),
+    }))
+  }, [])
+
+  const removeDailyTodo = useCallback((todoId: string) => {
+    setState((s) => ({
+      ...s,
+      dailyTodos: (s.dailyTodos ?? []).filter((t) => t.id !== todoId),
+    }))
+    flash('Removed from list')
+  }, [flash])
+
+  const setTodoRepeat = useCallback(
+    (todoId: string, repeat: TodoRepeat) => {
+      setState((s) => {
+        const todo = (s.dailyTodos ?? []).find((t) => t.id === todoId)
+        if (!todo) return s
+        const weekday = todo.repeatWeekday ?? getDay(parseDayKey(todo.date))
+        let templates = [...(s.todoTemplates ?? [])]
+        let templateId = todo.templateId
+
+        if (repeat === 'none') {
+          if (templateId) {
+            templates = templates.map((tpl) =>
+              tpl.id === templateId ? { ...tpl, active: false } : tpl,
+            )
+          }
+          templateId = undefined
+        } else if (templateId) {
+          templates = templates.map((tpl) =>
+            tpl.id === templateId
+              ? {
+                  ...tpl,
+                  active: true,
+                  repeat,
+                  repeatWeekday: repeat === 'weekly' ? weekday : undefined,
+                  title: todo.title,
+                  color: todo.color,
+                }
+              : tpl,
+          )
+        } else {
+          const tpl: TodoTemplate = {
+            id: uid('ttpl'),
+            title: todo.title,
+            color: todo.color,
+            groupId: todo.groupId,
+            repeat,
+            repeatWeekday: repeat === 'weekly' ? weekday : undefined,
+            active: true,
+            createdAt: new Date().toISOString(),
+          }
+          templates = [...templates, tpl]
+          templateId = tpl.id
+        }
+
+        return {
+          ...s,
+          todoTemplates: templates,
+          dailyTodos: (s.dailyTodos ?? []).map((t) =>
+            t.id === todoId
+              ? {
+                  ...t,
+                  repeat,
+                  templateId,
+                  repeatWeekday: repeat === 'weekly' ? weekday : undefined,
+                }
+              : t,
+          ),
+        }
+      })
+      flash(repeat === 'none' ? 'One-time only' : `Repeats ${repeat}`)
+    },
+    [flash],
+  )
+
+  const pullGroupItemToDaily = useCallback(
+    (groupId: string, item: TaskGroupItem, date?: string) => {
+      addDailyTodo({
+        title: item.title,
+        date: date ?? dayKey(),
+        color: item.color,
+        groupId,
+        repeat: item.defaultRepeat,
+        repeatWeekday:
+          item.defaultRepeat === 'weekly'
+            ? getDay(parseDayKey(date ?? dayKey()))
+            : undefined,
+      })
+    },
+    [addDailyTodo],
+  )
+
+  const pullGroupItemToCalendar = useCallback(
+    (groupId: string, item: TaskGroupItem, date?: string) => {
+      const key = date ?? dayKey()
+      const day = parseDayKey(key)
+      const start = setMinutes(setHours(day, 9), 0)
+      const end = addMinutes(start, 30)
+      let created: CalendarEvent | null = null
+      let stacksSnap: ReminderStack[] = []
+
+      setState((s) => {
+        stacksSnap = s.stacks
+        const group = (s.taskGroups ?? []).find((g) => g.id === groupId)
+        const cat = categoryById(group?.categoryId)
+        const event: CalendarEvent = {
+          id: uid('evt'),
+          title: item.title,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          notes: group ? `From task group · ${group.label}` : 'From task group',
+          color: item.color || cat.color,
+          categoryId: cat.id,
+          entryKind: 'event',
+          sourceLabel: group ? `Task group · ${group.label}` : 'Task group',
+          reminderStackId: s.defaultStackId,
+          createdAt: new Date().toISOString(),
+        }
+        created = event
+        return {
+          ...s,
+          events: [...s.events, event].sort(
+            (a, b) => +new Date(a.start) - +new Date(b.start),
+          ),
+          pet: {
+            ...s.pet,
+            eventsScheduled: s.pet.eventsScheduled + 1,
+          },
+        }
+      })
+      flash(`On calendar · ${item.title}`)
+      if (created) void scheduleEventNotifications(created, stacksSnap)
+    },
+    [flash],
+  )
+
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
     [state.candidates],
@@ -500,5 +757,12 @@ export function useAppState() {
     petReact,
     hardReset,
     notifyCaptureImported,
+    ensureDayTodos,
+    addDailyTodo,
+    toggleDailyTodo,
+    removeDailyTodo,
+    setTodoRepeat,
+    pullGroupItemToDaily,
+    pullGroupItemToCalendar,
   }
 }

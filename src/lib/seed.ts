@@ -2,6 +2,7 @@ import { addDays, addHours, setHours, setMinutes } from 'date-fns'
 import type { AppState, CalendarEvent, EventCandidate } from '../types'
 import { uid } from './id'
 import { createDefaultStacks } from './reminders'
+import { createSeedTaskGroups } from './taskGroups'
 
 function at(dayOffset: number, hour: number, minute = 0): Date {
   const base = setMinutes(setHours(new Date(), hour), minute)
@@ -30,6 +31,9 @@ export function createEmptyState(): AppState {
     hasSeenHero: false,
     seededAt: now,
     dismissedKeys: [],
+    taskGroups: createSeedTaskGroups(),
+    todoTemplates: [],
+    dailyTodos: [],
   }
 }
 
@@ -134,6 +138,9 @@ export function createSeedState(): AppState {
     hasSeenHero: false,
     seededAt: now,
     dismissedKeys: [],
+    taskGroups: createSeedTaskGroups(),
+    todoTemplates: [],
+    dailyTodos: [],
   }
 }
 
