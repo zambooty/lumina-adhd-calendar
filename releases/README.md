@@ -5,13 +5,13 @@ Debug APKs are **not** stored in this folder (they must stay out of the Cursor w
 **Also excluded from web publish:** `android/gradle/wrapper/gradle-wrapper.jar` (gitignored; restore via `npm run android:ensure-wrapper`). APKs and the Gradle wrapper jar are Android build artifacts — not part of the shipped web app.
 
 **Download:** GitHub Release asset  
-https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21-updates/lumina-debug.apk
+https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.1/lumina-debug.apk
 
 | | |
 |---|---|
-| Built from | `main` @ `13a066e` (in-app updates, PR #27) |
-| versionCode | `2` (`1.1.0-debug`) |
-| SHA-256 | `47e35625db81dcc9a138c5ca3768283765315ae7336028ac7db02f05c78814dd` |
+| Built from | `main` @ `88e77a2` (security hardenings + calendar Phase 1) |
+| versionCode | `3` (`1.1.1-debug`) |
+| SHA-256 | `be920aff7794c1dff8c54814650127d697fd9988ab8f677dd44802648265bdd0` |
 
 Rebuild locally with `npm run android:debug` (runs `android:ensure-wrapper`, then Cap sync + `assembleDebug`; APK under `android/app/build/outputs/apk/`).
 

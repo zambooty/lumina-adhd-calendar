@@ -24,14 +24,14 @@ Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointmen
 
 ### Download debug APK
 
-**[Download `lumina-debug.apk`](https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-21-updates/lumina-debug.apk)** — sideloadable debug build with in-app GitHub updates (PR #27; release [`android-debug-2026-11-21-updates`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-21-updates)).
+**[Download `lumina-debug.apk`](https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.1/lumina-debug.apk)** — sideloadable debug build with in-app GitHub updates (release [`android-debug-2026-11-24-1.1.1`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.1)).
 
 | | |
 |---|---|
 | Size | ~4.3 MB |
-| SHA-256 | `47e35625db81dcc9a138c5ca3768283765315ae7336028ac7db02f05c78814dd` |
-| Built from | `main` @ `13a066e` |
-| versionCode | `2` (`1.1.0-debug`) |
+| SHA-256 | `be920aff7794c1dff8c54814650127d697fd9988ab8f677dd44802648265bdd0` |
+| Built from | `main` @ `88e77a2` |
+| versionCode | `3` (`1.1.1-debug`) |
 | App ID | `com.makesoft.lumina` |
 
 Install: download on your phone and open it, or `adb install -r lumina-debug.apk`.  
