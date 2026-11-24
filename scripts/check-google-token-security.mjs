@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict'
 import {
+  clientKeyFromRequest,
   parseExchangeBody,
   parseRefreshBody,
   safeOAuthErrorCode,
@@ -119,7 +120,7 @@ assert.equal(
   'upstream_error',
 )
 
-// Success body strips unknown keys (id_token etc.) and seals refresh
+// Success body strips unknown keys (id_token etc.) and AES-seals refresh
 {
   const secret = 'test-client-secret'
   const body = tokenSuccessBody(
@@ -141,8 +142,12 @@ assert.equal(
     'scope',
     'tokenType',
   ])
-  assert.notEqual(body.refreshToken, '1//r')
-  assert.equal(unsealRefreshToken(String(body.refreshToken), secret), '1//r')
+  const sealed = String(body.refreshToken)
+  assert.ok(sealed.startsWith('lumina_rt2.'))
+  assert.notEqual(sealed, '1//r')
+  // Raw token must not be recoverable via base64 of the blob payload.
+  assert.equal(sealed.includes('1//r'), false)
+  assert.equal(unsealRefreshToken(sealed, secret), '1//r')
   assert.equal(unsealRefreshToken('1//r', secret), null)
   assert.equal('id_token' in body, false)
 }
@@ -151,9 +156,30 @@ assert.equal(
 {
   const secret = 'test-client-secret'
   const sealed = sealRefreshToken('1//refresh.abc', secret)
+  assert.ok(sealed.startsWith('lumina_rt2.'))
   assert.equal(unsealRefreshToken(sealed, secret), '1//refresh.abc')
   assert.equal(unsealRefreshToken(sealed.slice(0, -2) + 'aa', secret), null)
   assert.equal(unsealRefreshToken(sealed, 'other-secret'), null)
+}
+
+// Rate-limit key uses last XFF hop (not client-spoofable first hop)
+{
+  const spoofed = new Request('https://example.com/api', {
+    headers: {
+      'x-forwarded-for': '1.2.3.4, 10.0.0.9',
+      origin: published,
+    },
+  })
+  const alone = new Request('https://example.com/api', {
+    headers: {
+      'x-forwarded-for': '1.2.3.4',
+      origin: published,
+    },
+  })
+  const a = clientKeyFromRequest(spoofed)
+  const b = clientKeyFromRequest(alone)
+  assert.notEqual(a, b)
+  assert.equal(a.length, 32)
 }
 
 // Rate limiter

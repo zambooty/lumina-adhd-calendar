@@ -2,12 +2,21 @@
  * Shared hardening helpers for /api/google/exchange + /api/google/refresh.
  * No tokens / secrets in logs or error bodies.
  *
- * Refresh tokens returned to the client are HMAC-sealed with the server
- * client secret so /api/google/refresh cannot be used as an open proxy for
+ * Refresh tokens returned to the client are AES-GCM encrypted with a key
+ * derived from the server client secret so the raw Google refresh token is
+ * not recoverable from the browser blob, and /api/google/refresh cannot proxy
  * arbitrary Google refresh tokens.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from 'node:crypto'
 import {
   isAllowedRedirectUri,
   type OriginCheckHeaders,
@@ -32,7 +41,11 @@ const MAX_CODE_LEN = 2048
 /** Sealed blobs are larger than raw Google refresh tokens. */
 const MAX_REFRESH_TOKEN_LEN = 8192
 const MAX_REDIRECT_URI_LEN = 512
-const REFRESH_SEAL_PREFIX = 'lumina_rt1.'
+/** Legacy HMAC seal (raw token recoverable) — still accepted on refresh once. */
+const REFRESH_SEAL_PREFIX_V1 = 'lumina_rt1.'
+/** AES-256-GCM seal — current. */
+const REFRESH_SEAL_PREFIX_V2 = 'lumina_rt2.'
+const RATE_LIMIT_SALT = 'lumina-rate-v1'
 
 function envInt(name: string, fallback: number): number {
   const raw = (process.env[name] ?? '').trim()
@@ -53,19 +66,34 @@ export function refreshRateLimit(clientKey: string): RateLimitResult {
   return takeRateLimit(`refresh:${clientKey}`, max, 60_000)
 }
 
-/** Prefer edge-forwarded client IP; never throw. */
+/**
+ * Rate-limit client key that resists X-Forwarded-For spoofing.
+ *
+ * Visitors can prepend hops to XFF; the edge appends the real client IP, so
+ * we take the *last* hop (not the first). Prefer platform-set X-Real-IP when
+ * present. Mix Origin into the key so one spoofed IP cannot widen every
+ * origin's budget.
+ */
 export function clientKeyFromRequest(request: Request): string {
-  const xf = request.headers.get('x-forwarded-for')
-  if (xf) {
-    const first = xf.split(',')[0]?.trim()
-    if (first) return first.slice(0, 128)
-  }
   const real = request.headers.get('x-real-ip')?.trim()
-  if (real) return real.slice(0, 128)
-  // Fallback: coarse key from Origin (still rate-limits a single browser origin).
-  const origin = request.headers.get('origin')?.trim()
-  if (origin) return `origin:${origin.slice(0, 128)}`
-  return 'unknown'
+  let ip = real && real.length > 0 ? real.slice(0, 128) : ''
+  if (!ip) {
+    const xf = request.headers.get('x-forwarded-for')
+    if (xf) {
+      const hops = xf
+        .split(',')
+        .map((h) => h.trim())
+        .filter(Boolean)
+      const last = hops[hops.length - 1]
+      if (last) ip = last.slice(0, 128)
+    }
+  }
+  const origin = (request.headers.get('origin') || '').trim().slice(0, 128)
+  const material = `${ip || 'unknown'}|${origin || 'no-origin'}`
+  return createHash('sha256')
+    .update(`${RATE_LIMIT_SALT}|${material}`)
+    .digest('hex')
+    .slice(0, 32)
 }
 
 export function rateLimitedResponse(result: RateLimitResult): Response {
@@ -245,25 +273,43 @@ function fromB64url(value: string): Buffer | null {
   }
 }
 
-/** Seal a Google refresh token so only this app's refresh route can unwrap it. */
-export function sealRefreshToken(raw: string, secret: string): string {
-  const payload = b64url(Buffer.from(raw, 'utf8'))
-  const mac = b64url(
-    createHmac('sha256', secret).update(`lumina_rt1|${raw}`).digest(),
-  )
-  return `${REFRESH_SEAL_PREFIX}${payload}.${mac}`
+function deriveSealKey(secret: string): Buffer {
+  return scryptSync(secret, 'lumina-refresh-v2', 32)
 }
 
-/**
- * Unwrap a sealed refresh token. Returns null for raw Google tokens or
- * tampered blobs — callers should treat that as reconnect_required.
- */
-export function unsealRefreshToken(
-  sealed: string,
-  secret: string,
-): string | null {
-  if (!sealed.startsWith(REFRESH_SEAL_PREFIX) || !secret) return null
-  const rest = sealed.slice(REFRESH_SEAL_PREFIX.length)
+/** Encrypt a Google refresh token (AES-256-GCM) for client storage. */
+export function sealRefreshToken(raw: string, secret: string): string {
+  const iv = randomBytes(12)
+  const key = deriveSealKey(secret)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const enc = Buffer.concat([cipher.update(raw, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${REFRESH_SEAL_PREFIX_V2}${b64url(Buffer.concat([iv, tag, enc]))}`
+}
+
+function unsealV2(sealed: string, secret: string): string | null {
+  const rest = sealed.slice(REFRESH_SEAL_PREFIX_V2.length)
+  const buf = fromB64url(rest)
+  if (!buf || buf.length < 12 + 16 + 1) return null
+  const iv = buf.subarray(0, 12)
+  const tag = buf.subarray(12, 28)
+  const data = buf.subarray(28)
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', deriveSealKey(secret), iv)
+    decipher.setAuthTag(tag)
+    const raw = Buffer.concat([decipher.update(data), decipher.final()]).toString(
+      'utf8',
+    )
+    if (!raw || raw.length > MAX_REFRESH_TOKEN_LEN) return null
+    return raw
+  } catch {
+    return null
+  }
+}
+
+/** Legacy v1 HMAC seal (plaintext recoverable) — migrate on next refresh. */
+function unsealV1(sealed: string, secret: string): string | null {
+  const rest = sealed.slice(REFRESH_SEAL_PREFIX_V1.length)
   const dot = rest.lastIndexOf('.')
   if (dot <= 0) return null
   const payload = rest.slice(0, dot)
@@ -279,4 +325,18 @@ export function unsealRefreshToken(
   if (expected.length !== macBuf.length) return null
   if (!timingSafeEqual(expected, macBuf)) return null
   return raw
+}
+
+/**
+ * Unwrap a sealed refresh token. Returns null for raw Google tokens or
+ * tampered blobs — callers should treat that as reconnect_required.
+ */
+export function unsealRefreshToken(
+  sealed: string,
+  secret: string,
+): string | null {
+  if (!secret || !sealed) return null
+  if (sealed.startsWith(REFRESH_SEAL_PREFIX_V2)) return unsealV2(sealed, secret)
+  if (sealed.startsWith(REFRESH_SEAL_PREFIX_V1)) return unsealV1(sealed, secret)
+  return null
 }

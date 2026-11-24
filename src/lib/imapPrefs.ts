@@ -1,11 +1,11 @@
 /**
- * Local IMAP connection prefs (host/user/port). Passwords stay in the browser
- * session only when the user opts in — never committed, never logged.
+ * Local IMAP connection prefs (host/user/port). App passwords stay in memory
+ * only for this page lifetime — never localStorage/sessionStorage (XSS risk).
  */
 import type { ImapAccountPrefs } from '../connectors/types'
 
 const KEY = 'lumina_imap_prefs_v1'
-const SESSION_PASS_KEY = 'lumina_imap_session_pass'
+const LEGACY_SESSION_PASS_KEY = 'lumina_imap_session_pass'
 
 const DEFAULTS: ImapAccountPrefs = {
   host: '',
@@ -14,7 +14,19 @@ const DEFAULTS: ImapAccountPrefs = {
   provider: 'generic',
 }
 
+/** In-memory only — cleared on full reload. */
+let memoryPassword: string | null = null
+
+function clearLegacySessionPassword(): void {
+  try {
+    sessionStorage.removeItem(LEGACY_SESSION_PASS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadImapPrefs(): ImapAccountPrefs {
+  clearLegacySessionPassword()
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS }
@@ -48,22 +60,15 @@ export function saveImapPrefs(prefs: ImapAccountPrefs): void {
   )
 }
 
-/** Ephemeral app-password for a future live IMAP pull (session only). */
+/** Ephemeral app-password for IMAP pull (memory only). */
 export function setImapSessionPassword(password: string): void {
-  try {
-    if (password) sessionStorage.setItem(SESSION_PASS_KEY, password)
-    else sessionStorage.removeItem(SESSION_PASS_KEY)
-  } catch {
-    /* ignore */
-  }
+  clearLegacySessionPassword()
+  memoryPassword = password ? password : null
 }
 
 export function getImapSessionPassword(): string | null {
-  try {
-    return sessionStorage.getItem(SESSION_PASS_KEY)
-  } catch {
-    return null
-  }
+  clearLegacySessionPassword()
+  return memoryPassword
 }
 
 export const IMAP_PROVIDER_PRESETS: Record<
