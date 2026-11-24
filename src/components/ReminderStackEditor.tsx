@@ -1,4 +1,5 @@
 import type { ReminderStack } from '../types'
+import { formatDurationMinutes } from '../lib/duration'
 import { uid } from '../lib/id'
 
 type Props = {
@@ -94,6 +95,9 @@ export function ReminderStackEditor({
                   })
                 }
               />
+              <span className="event-meta" aria-hidden>
+                {formatDurationMinutes(o.minutesBefore)}
+              </span>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"

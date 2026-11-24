@@ -1,4 +1,5 @@
 import type { ReminderOffset, ReminderStack } from '../types'
+import { formatDurationMinutes } from './duration'
 import { uid } from './id'
 
 export const DEFAULT_OFFSETS: ReminderOffset[] = [
@@ -38,13 +39,5 @@ export function createDefaultStacks(): ReminderStack[] {
 }
 
 export function formatOffset(minutesBefore: number): string {
-  if (minutesBefore >= 24 * 60) {
-    const d = Math.round(minutesBefore / (24 * 60))
-    return `${d}d`
-  }
-  if (minutesBefore >= 60) {
-    const h = Math.round(minutesBefore / 60)
-    return `${h}h`
-  }
-  return `${minutesBefore}m`
+  return formatDurationMinutes(minutesBefore)
 }

@@ -8,7 +8,6 @@ import { ReminderStackEditor } from './components/ReminderStackEditor'
 import { GoogleConnect } from './components/GoogleConnect'
 import { BlinkHeaderPet } from './components/BlinkHeaderPet'
 import { AppMenu } from './components/AppMenu'
-import { UpcomingList } from './components/UpcomingList'
 import { PullDecisionSheet } from './components/PullDecisionSheet'
 import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { UpdateAvailableSheet } from './components/UpdateAvailableSheet'
@@ -184,7 +183,6 @@ export default function App() {
   }, [closeMenu, runUpdateCheck])
 
   const inboxCount = pendingCandidates.length
-  const eventCount = upcomingEvents.length
   const leadCandidate = pendingCandidates[0] ?? null
 
   const leaveEvent = useMemo(() => {
@@ -233,28 +231,6 @@ export default function App() {
         ),
       },
       {
-        id: 'upcoming' as const,
-        title: 'Upcoming list',
-        hint: 'Vivid labels · ADHD-friendly hierarchy',
-        accent: 'cyan' as const,
-        badge: (
-          <span className="section-badge">
-            {eventCount} event{eventCount === 1 ? '' : 's'}
-          </span>
-        ),
-        children: (
-          <UpcomingList
-            events={upcomingEvents}
-            stacks={state.stacks}
-            onChangeStack={setEventStack}
-            onOpenEvent={(id) => {
-              setUiFocusEventId(id)
-              setMenuOpen(false)
-            }}
-          />
-        ),
-      },
-      {
         id: 'google' as const,
         title: 'Google connect',
         hint: 'Calendar + Gmail live pull',
@@ -285,7 +261,6 @@ export default function App() {
     ],
     [
       inboxCount,
-      eventCount,
       pendingCandidates,
       pulling,
       state.autoAddHighConfidence,
@@ -298,8 +273,6 @@ export default function App() {
       dismissCandidate,
       toggleAutoAdd,
       notifyCaptureImported,
-      upcomingEvents,
-      setEventStack,
       setDefaultStack,
       updateStack,
       petReact,
@@ -319,45 +292,47 @@ export default function App() {
         <span className="mix-aurora-orb mix-aurora-orb--lime" />
       </div>
 
-      <header className="topbar topbar--calendar topbar--mix">
-        <div className="topbar-brand-row">
-          <BlinkHeaderPet pet={state.pet} onReact={petReact} />
-          <div>
-            <div className="brand-mark">LUMINA</div>
-            <div className="brand-sub">
-              <span className="brand-sub-full">ADHD Calendar Companion</span>
-              <span className="brand-sub-short">Companion</span>
+      {!menuOpen && (
+        <header className="topbar topbar--calendar topbar--mix">
+          <div className="topbar-brand-row">
+            <BlinkHeaderPet pet={state.pet} onReact={petReact} />
+            <div>
+              <div className="brand-mark">LUMINA</div>
+              <div className="brand-sub">
+                <span className="brand-sub-full">ADHD Calendar Companion</span>
+                <span className="brand-sub-short">Companion</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="topbar-actions">
-          <button
-            type="button"
-            className="btn btn-primary btn-sm topbar-pull"
-            onClick={() => void handleTopPull()}
-            disabled={pulling}
-          >
-            {pulling ? 'Scanning…' : 'Pull'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm menu-trigger"
-            aria-expanded={menuOpen}
-            aria-haspopup="dialog"
-            onClick={openMenu}
-          >
-            <span className="menu-trigger-icon" aria-hidden>
-              <span />
-              <span />
-              <span />
-            </span>
-            Menu
-            {inboxCount > 0 && (
-              <span className="menu-trigger-badge">{inboxCount}</span>
-            )}
-          </button>
-        </div>
-      </header>
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm topbar-pull"
+              onClick={() => void handleTopPull()}
+              disabled={pulling}
+            >
+              {pulling ? 'Scanning…' : 'Pull'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm menu-trigger"
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              aria-haspopup="dialog"
+              onClick={openMenu}
+            >
+              <span className="menu-trigger-icon" aria-hidden>
+                <span />
+                <span />
+                <span />
+              </span>
+              {inboxCount > 0 && (
+                <span className="menu-trigger-badge">{inboxCount}</span>
+              )}
+            </button>
+          </div>
+        </header>
+      )}
 
       <main className="layout layout-calendar layout-mix">
         <MixHome
