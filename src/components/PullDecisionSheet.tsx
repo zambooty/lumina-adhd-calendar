@@ -17,6 +17,19 @@ type Props = {
 const SWIPE_THRESHOLD = 110
 const SWIPE_VELOCITY = 650
 
+/** Short ADHD-friendly status — drop essay-length not-signed-in copy. */
+function shortPullStatus(status: string): string {
+  const s = status.trim()
+  if (/not signed in/i.test(s)) {
+    const head = s.split(/·\s*Not signed/i)[0]?.trim()
+    return head
+      ? `${head.replace(/\.\s*$/, '')} · Not signed in — Menu → Google`
+      : 'Not signed in — Menu → Google'
+  }
+  if (s.length <= 96) return s
+  return `${s.slice(0, 93).trimEnd()}…`
+}
+
 /**
  * Mix B — single-decision Pull sheet: one candidate, swipe or Add / Deny.
  * Right = add, left = deny. Buttons + keyboard stay for accessibility.
@@ -133,12 +146,12 @@ export function PullDecisionSheet({
               </button>
             </div>
             <p className="pull-sheet-lead">
-              Swipe right to add, left to deny — or use the buttons / arrow keys.
+              Swipe right to add · left to deny
             </p>
 
             {pulling && (
               <p className="pull-status pull-status-ok" role="status">
-                Scanning sources…
+                Scanning…
               </p>
             )}
             {!pulling && pullStatus && (
@@ -154,7 +167,7 @@ export function PullDecisionSheet({
                 }`}
                 role="status"
               >
-                {pullStatus}
+                {shortPullStatus(pullStatus)}
               </p>
             )}
 
@@ -190,17 +203,17 @@ export function PullDecisionSheet({
                   <p className="pull-decision-gesture" aria-hidden>
                     ← deny · add →
                   </p>
-                  <h3 className="pull-decision-label">One sheet. One decision.</h3>
+                  <h3 className="pull-decision-label">One decision</h3>
                   <p className="pull-decision-title">
                     {candidate.title}
                     {' — '}
                     {safeFormatIso(candidate.start, 'EEEE h:mm')}
                   </p>
                   <p className="pull-decision-meta">
-                    From {candidate.sourceLabel}
+                    {candidate.sourceLabel}
                     {' · '}
-                    {Math.round(candidate.confidence * 100)}% confidence
-                    {candidate.source === 'texts' ? ' · native SMS' : ''}
+                    {Math.round(candidate.confidence * 100)}%
+                    {candidate.source === 'texts' ? ' · SMS' : ''}
                   </p>
                 </motion.section>
 
@@ -211,34 +224,28 @@ export function PullDecisionSheet({
                     onClick={() => decide('deny')}
                   >
                     Deny
-                    {remaining > 1 ? ` · ${remaining - 1} left` : ''}
+                    {remaining > 1 ? ` · ${remaining - 1}` : ''}
                   </button>
                   <button
                     type="button"
                     className="btn btn-primary pull-decision-add"
                     onClick={() => decide('add')}
                   >
-                    Add to calendar
+                    Add
                   </button>
                 </div>
                 <p className="pull-decision-a11y-hint">
-                  Keyboard: ← deny · → or Enter add · Esc close
+                  ← deny · → add · Esc close
                 </p>
               </div>
             ) : (
               <section className="mix-glass pull-decision">
                 <h3 className="pull-decision-label">Inbox clear</h3>
                 <p className="pull-decision-meta">
-                  Nothing waiting. On Android, Allow SMS when Pull asks (or
-                  paste/share a thread). Connect Google for Calendar + Gmail.
+                  Nothing waiting. Connect Google, then Pull again.
                 </p>
               </section>
             )}
-
-            <div className="pull-blink-row">
-              <span className="pull-blink-orb" aria-hidden />
-              <span>Blink perks up when a pull lands.</span>
-            </div>
           </motion.div>
         </motion.div>
       )}

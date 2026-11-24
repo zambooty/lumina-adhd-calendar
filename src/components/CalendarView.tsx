@@ -194,6 +194,17 @@ export function CalendarView({
     onFocusConsumed?.()
   }, [focusEventId, events, onFocusConsumed])
 
+  useEffect(() => {
+    if (!sheet) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      setSheet(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sheet])
+
   function openDay(day: Date) {
     setSheet({ kind: 'day', day: startOfDay(day) })
   }
