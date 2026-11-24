@@ -1,4 +1,5 @@
 import type { AppState, ReminderStack } from '../types'
+import { ensurePetStore } from './petStore'
 import { AUTO_REMINDER_PRESETS } from './reminders'
 import { createEmptyState } from './seed'
 import { dismissKeysFor, rememberDismissed } from './pullFilter'
@@ -47,6 +48,7 @@ function normalizeState(raw: AppState): AppState {
     goals: Array.isArray(raw.goals) ? raw.goals : [],
     journalEntries: Array.isArray(raw.journalEntries) ? raw.journalEntries : [],
     moodCheckIns: Array.isArray(raw.moodCheckIns) ? raw.moodCheckIns : [],
+    petStore: ensurePetStore(raw.petStore),
   }
 }
 

@@ -15,9 +15,17 @@ import { FeelingCheckIn } from './components/FeelingCheckIn'
 import { GoalsPanel } from './components/GoalsPanel'
 import { JournalPanel } from './components/JournalPanel'
 import { HabitsReportsPanel } from './components/HabitsReportsPanel'
+import { PetStorePanel } from './components/PetStorePanel'
+import { PetStorePrompt } from './components/PetStorePrompt'
 import { PullDecisionSheet } from './components/PullDecisionSheet'
 import { checkInsForDay, checkInDayKey } from './lib/feelings'
 import { goalsNeedingPrompt } from './lib/goals'
+import {
+  countAffordableNew,
+  ensurePetStore,
+  newlyAvailableItems,
+} from './lib/petStore'
+import { petXp } from './lib/pet'
 import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { UpdateAvailableSheet } from './components/UpdateAvailableSheet'
 import { useAppState } from './hooks/useAppState'
@@ -73,6 +81,9 @@ export default function App() {
     addJournalEntry,
     removeJournalEntry,
     toggleEventComplete,
+    buyPetStoreItem,
+    equipPetStoreItem,
+    dismissPetStorePrompts,
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -84,8 +95,10 @@ export default function App() {
     | 'journal'
     | 'habits'
     | 'feelings'
+    | 'store'
     | null
   >(null)
+  const [storePromptOpen, setStorePromptOpen] = useState(true)
   const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
   const [pullSheetOpen, setPullSheetOpen] = useState(false)
   const [leaveMomentOpen, setLeaveMomentOpen] = useState(false)
@@ -121,6 +134,12 @@ export default function App() {
     setMenuFocusSection('feelings')
     setMenuOpen(true)
   }, [])
+  const openStoreMenu = useCallback(() => {
+    setStorePromptOpen(false)
+    dismissPetStorePrompts()
+    setMenuFocusSection('store')
+    setMenuOpen(true)
+  }, [dismissPetStorePrompts])
 
   const runUpdateCheck = useCallback(async (opts?: { forceSheet?: boolean }) => {
     if (!isAndroidNative()) return
@@ -261,6 +280,18 @@ export default function App() {
   const goalNudgeCount = useMemo(
     () => goalsNeedingPrompt(state.goals ?? []).length,
     [state.goals],
+  )
+  const petStore = useMemo(
+    () => ensurePetStore(state.petStore),
+    [state.petStore],
+  )
+  const newStoreItems = useMemo(
+    () => newlyAvailableItems(petStore, petXp(state.pet)),
+    [petStore, state.pet],
+  )
+  const storeBadgeCount = useMemo(
+    () => countAffordableNew(petStore, petXp(state.pet)),
+    [petStore, state.pet],
   )
 
   const menuSections = useMemo(
@@ -436,12 +467,36 @@ export default function App() {
         accent: 'amber' as const,
         children: <CompanionPet pet={state.pet} onReact={petReact} />,
       },
+      {
+        id: 'store' as const,
+        title: 'Pet store',
+        hint: 'Spark · skins · animals · clothes · pet-for-pet',
+        accent: 'coral' as const,
+        badge:
+          storeBadgeCount > 0 ? (
+            <span className="section-badge section-badge-hot">
+              {storeBadgeCount} new
+            </span>
+          ) : (
+            <span className="section-badge">{petStore.spark} spark</span>
+          ),
+        children: (
+          <PetStorePanel
+            pet={state.pet}
+            store={petStore}
+            onBuy={buyPetStoreItem}
+            onEquip={equipPetStoreItem}
+          />
+        ),
+      },
     ],
     [
       inboxCount,
       todayTodoCount,
       todayMoodCount,
       goalNudgeCount,
+      storeBadgeCount,
+      petStore,
       pendingCandidates,
       pulling,
       state.autoAddHighConfidence,
@@ -463,6 +518,8 @@ export default function App() {
       setDefaultStack,
       updateStack,
       petReact,
+      buyPetStoreItem,
+      equipPetStoreItem,
       openPullSheet,
       ensureDayTodos,
       addDailyTodo,
@@ -650,6 +707,18 @@ export default function App() {
         onRetryInstall={() => void handleRetryInstall()}
         onCheckAgain={() => void runUpdateCheck({ forceSheet: true })}
       />
+
+      {storePromptOpen && newStoreItems.length > 0 && !menuOpen && (
+        <PetStorePrompt
+          items={newStoreItems}
+          spark={petStore.spark}
+          onOpenStore={openStoreMenu}
+          onDismiss={() => {
+            setStorePromptOpen(false)
+            dismissPetStorePrompts()
+          }}
+        />
+      )}
 
       <AnimatePresence>
         {toast && toast !== 'Opened from reminder' && (

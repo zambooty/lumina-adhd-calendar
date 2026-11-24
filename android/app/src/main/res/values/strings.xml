@@ -4,4 +4,8 @@
     <string name="title_activity_main">LUMINA</string>
     <string name="package_name">com.makesoft.lumina</string>
     <string name="custom_url_scheme">com.makesoft.lumina</string>
+    <string name="widget_pet_kicker">Companion</string>
+    <string name="widget_pet_description">Blink companion — stage and spark</string>
+    <string name="widget_agenda_kicker">LUMINA</string>
+    <string name="widget_agenda_description">Upcoming events and daily todos</string>
 </resources>
