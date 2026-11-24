@@ -53,7 +53,7 @@ export const STAGE_COPY: Record<
   },
   glowfox: {
     title: 'Glowfox Diva',
-    blurb: 'Reminder stacks? Iconic. You’re welcome.',
+    blurb: 'Auto reminders? Iconic. You’re welcome.',
     vibe: 'Main-character energy unlocked.',
   },
   legend: {

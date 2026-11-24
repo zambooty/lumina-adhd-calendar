@@ -1,5 +1,5 @@
 /**
- * ADHD reminder stacks → OS local notifications (Capacitor Android).
+ * ADHD auto reminders → OS local notifications (Capacitor Android).
  * No-ops on web. Dark-friendly copy; tap opens the app (event deep-link when practical).
  */
 import type { CalendarEvent, ReminderOffset, ReminderStack } from '../types'
@@ -48,7 +48,7 @@ async function ensureChannel(): Promise<void> {
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: CHANNEL_NAME,
-    description: 'ADHD reminder stacks for scheduled events',
+    description: 'ADHD auto reminders for scheduled events',
     importance: 5,
     visibility: 1,
     vibration: true,

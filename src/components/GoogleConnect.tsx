@@ -176,7 +176,7 @@ export function GoogleConnect({ onChange }: Props) {
             {demo
               ? 'Calendar + Gmail use sample data until secrets are set in Cursor Apps.'
               : connected
-                ? 'Live pulls use Google Calendar + Gmail with ADHD reminder stacks.'
+                ? 'Live pulls use Google Calendar + Gmail with auto reminders.'
                 : prefersRedirectOAuth()
                   ? 'Connect Google (mobile-safe redirect) to pull real appointments.'
                   : 'Connect Google to pull real appointments into LUMINA.'}

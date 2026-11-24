@@ -96,7 +96,7 @@ export function UpcomingList({
               onKeyDown={(e) => e.stopPropagation()}
             >
               <label className="event-meta" htmlFor={`upcoming-stack-${event.id}`}>
-                Stack
+                Reminders
               </label>
               <select
                 id={`upcoming-stack-${event.id}`}

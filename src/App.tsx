@@ -4,7 +4,7 @@ import { Hero } from './components/Hero'
 import { CompanionPet } from './components/CompanionPet'
 import { MixHome } from './components/MixHome'
 import { SourceInbox } from './components/SourceInbox'
-import { ReminderStackEditor } from './components/ReminderStackEditor'
+import { AutoRemindersPanel } from './components/AutoRemindersPanel'
 import { GoogleConnect } from './components/GoogleConnect'
 import { BlinkHeaderPet } from './components/BlinkHeaderPet'
 import { AppMenu } from './components/AppMenu'
@@ -241,11 +241,11 @@ export default function App() {
       },
       {
         id: 'reminders' as const,
-        title: 'Reminder stacks',
-        hint: 'Defaults for new events · override per event',
+        title: 'Auto reminders',
+        hint: 'Friendly defaults · leave-now included',
         accent: 'lime' as const,
         children: (
-          <ReminderStackEditor
+          <AutoRemindersPanel
             stacks={state.stacks}
             defaultStackId={state.defaultStackId}
             onSetDefault={setDefaultStack}

@@ -23,7 +23,7 @@ export function Hero({ onEnter }: Props) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25, duration: 0.55 }}
         >
-          ADHD calendar companion — auto-capture appointments, stack reminders,
+          ADHD calendar companion — auto-capture appointments, auto reminders,
           grow your glow pet.
         </motion.p>
         <motion.div

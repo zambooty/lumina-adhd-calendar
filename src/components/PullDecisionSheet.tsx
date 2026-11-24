@@ -1,4 +1,5 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, type PanInfo, useMotionValue, useTransform } from 'framer-motion'
+import { useCallback, useEffect, useRef } from 'react'
 import type { EventCandidate } from '../types'
 import { safeFormatIso } from '../lib/safeDate'
 
@@ -13,9 +14,12 @@ type Props = {
   onClose: () => void
 }
 
+const SWIPE_THRESHOLD = 110
+const SWIPE_VELOCITY = 650
+
 /**
- * Mix B — single-decision Pull sheet: one candidate, Add / Skip.
- * Shared glass language with home; Blink stays accent-only.
+ * Mix B — single-decision Pull sheet: one candidate, swipe or Add / Deny.
+ * Right = add, left = deny. Buttons + keyboard stay for accessibility.
  */
 export function PullDecisionSheet({
   open,
@@ -27,6 +31,72 @@ export function PullDecisionSheet({
   onSkip,
   onClose,
 }: Props) {
+  const x = useMotionValue(0)
+  const rotate = useTransform(x, [-220, 0, 220], [-12, 0, 12])
+  const addOpacity = useTransform(x, [0, 80, 160], [0, 0.55, 1])
+  const denyOpacity = useTransform(x, [-160, -80, 0], [1, 0.55, 0])
+  const decidedRef = useRef(false)
+
+  const resetCard = useCallback(() => {
+    x.set(0)
+    decidedRef.current = false
+  }, [x])
+
+  useEffect(() => {
+    resetCard()
+  }, [candidate?.id, open, resetCard])
+
+  const decide = useCallback(
+    (action: 'add' | 'deny') => {
+      if (!candidate || decidedRef.current) return
+      decidedRef.current = true
+      if (action === 'add') onAdd(candidate.id)
+      else onSkip(candidate.id)
+    },
+    [candidate, onAdd, onSkip],
+  )
+
+  const onDragEnd = useCallback(
+    (_: unknown, info: PanInfo) => {
+      if (!candidate) return
+      const { offset, velocity } = info
+      const goRight =
+        offset.x > SWIPE_THRESHOLD || velocity.x > SWIPE_VELOCITY
+      const goLeft =
+        offset.x < -SWIPE_THRESHOLD || velocity.x < -SWIPE_VELOCITY
+      if (goRight) {
+        decide('add')
+        return
+      }
+      if (goLeft) {
+        decide('deny')
+        return
+      }
+      x.set(0)
+    },
+    [candidate, decide, x],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (!candidate) return
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        e.preventDefault()
+        decide('add')
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
+        e.preventDefault()
+        decide('deny')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, candidate, decide, onClose])
+
   return (
     <AnimatePresence>
       {open && (
@@ -63,8 +133,7 @@ export function PullDecisionSheet({
               </button>
             </div>
             <p className="pull-sheet-lead">
-              One job: gather appointments from SMS, mail, notes — then decide
-              once.
+              Swipe right to add, left to deny — or use the buttons / arrow keys.
             </p>
 
             {pulling && (
@@ -90,35 +159,72 @@ export function PullDecisionSheet({
             )}
 
             {candidate ? (
-              <section className="mix-glass pull-decision">
-                <h3 className="pull-decision-label">One sheet. One decision.</h3>
-                <p className="pull-decision-title">
-                  {candidate.title}
-                  {' — '}
-                  {safeFormatIso(candidate.start, 'EEEE h:mm')}
-                </p>
-                <p className="pull-decision-meta">
-                  From {candidate.sourceLabel}
-                  {' · '}
-                  {Math.round(candidate.confidence * 100)}% confidence
-                  {candidate.source === 'texts' ? ' · native SMS' : ''}
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary pull-decision-add"
-                  onClick={() => onAdd(candidate.id)}
+              <div className="pull-swipe-stage">
+                <motion.div
+                  className="pull-swipe-hint pull-swipe-hint--deny"
+                  style={{ opacity: denyOpacity }}
+                  aria-hidden
                 >
-                  Add to calendar
-                </button>
-                <button
-                  type="button"
-                  className="pull-decision-skip"
-                  onClick={() => onSkip(candidate.id)}
+                  Deny
+                </motion.div>
+                <motion.div
+                  className="pull-swipe-hint pull-swipe-hint--add"
+                  style={{ opacity: addOpacity }}
+                  aria-hidden
                 >
-                  Skip · show next
-                  {remaining > 1 ? ` (${remaining - 1} left)` : ''}
-                </button>
-              </section>
+                  Add
+                </motion.div>
+
+                <motion.section
+                  key={candidate.id}
+                  className="mix-glass pull-decision pull-decision--swipe"
+                  style={{ x, rotate }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.92}
+                  onDragEnd={onDragEnd}
+                  whileDrag={{ cursor: 'grabbing' }}
+                  aria-roledescription="swipeable card"
+                  aria-label={`${candidate.title}. Swipe right to add, left to deny.`}
+                >
+                  <p className="pull-decision-gesture" aria-hidden>
+                    ← deny · add →
+                  </p>
+                  <h3 className="pull-decision-label">One sheet. One decision.</h3>
+                  <p className="pull-decision-title">
+                    {candidate.title}
+                    {' — '}
+                    {safeFormatIso(candidate.start, 'EEEE h:mm')}
+                  </p>
+                  <p className="pull-decision-meta">
+                    From {candidate.sourceLabel}
+                    {' · '}
+                    {Math.round(candidate.confidence * 100)}% confidence
+                    {candidate.source === 'texts' ? ' · native SMS' : ''}
+                  </p>
+                </motion.section>
+
+                <div className="pull-decision-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost pull-decision-deny"
+                    onClick={() => decide('deny')}
+                  >
+                    Deny
+                    {remaining > 1 ? ` · ${remaining - 1} left` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary pull-decision-add"
+                    onClick={() => decide('add')}
+                  >
+                    Add to calendar
+                  </button>
+                </div>
+                <p className="pull-decision-a11y-hint">
+                  Keyboard: ← deny · → or Enter add · Esc close
+                </p>
+              </div>
             ) : (
               <section className="mix-glass pull-decision">
                 <h3 className="pull-decision-label">Inbox clear</h3>
