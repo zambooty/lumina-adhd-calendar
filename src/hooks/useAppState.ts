@@ -37,7 +37,6 @@ import {
   materializeTemplates,
   parseDayKey,
 } from '../lib/dailyTodos'
-import { categoryById } from '../lib/taskCategories'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
@@ -698,6 +697,9 @@ export function useAppState() {
           end: end.toISOString(),
           notes: group ? `From task group · ${group.label}` : 'From task group',
           color: item.color || cat.color,
+          categoryId: cat.id,
+          entryKind: 'event',
+          sourceLabel: group ? `Task group · ${group.label}` : 'Task group',
           reminderStackId: s.defaultStackId,
           createdAt: new Date().toISOString(),
         }

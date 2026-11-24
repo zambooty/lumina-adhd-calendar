@@ -16,20 +16,24 @@ function note(msg) {
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
 
   // Hero → enter
-  const enter = page.getByRole('button', { name: /enter|start|begin|open/i }).first()
+  const enter = page.getByRole('button', { name: /open my calendar/i })
   if (await enter.count()) {
     await enter.click()
     await page.waitForTimeout(400)
   } else {
-    // Fallback: any primary CTA on hero
     const cta = page.locator('.hero button, .btn-primary').first()
     if (await cta.count()) await cta.click()
   }
 
   await page.screenshot({ path: `${OUT}/01-home.png`, fullPage: true })
-  note('home loaded')
+  const hasCalendar =
+    (await page.locator('.calendar-view, .cal-view, [class*="cal-"]').count()) > 0 ||
+    (await page.getByText(/week|month|year/i).count()) > 0
+  note(`home loaded · calendar surface: ${hasCalendar}`)
 
   // Open sandwich menu
   await page.getByRole('button', { name: /open menu/i }).click()
