@@ -11,7 +11,9 @@ import { AppMenu } from './components/AppMenu'
 import { DailyTodoList } from './components/DailyTodoList'
 import { TaskGroupsPanel } from './components/TaskGroupsPanel'
 import { AgendaView } from './components/AgendaView'
+import { FeelingCheckIn } from './components/FeelingCheckIn'
 import { PullDecisionSheet } from './components/PullDecisionSheet'
+import { checkInsForDay, checkInDayKey } from './lib/feelings'
 import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { UpdateAvailableSheet } from './components/UpdateAvailableSheet'
 import { useAppState } from './hooks/useAppState'
@@ -61,11 +63,12 @@ export default function App() {
     setTodoRepeat,
     pullGroupItemToDaily,
     pullGroupItemToCalendar,
+    addMoodCheckIn,
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFocusSection, setMenuFocusSection] = useState<
-    'todos' | 'groups' | 'agenda' | null
+    'todos' | 'groups' | 'agenda' | 'feelings' | null
   >(null)
   const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
   const [pullSheetOpen, setPullSheetOpen] = useState(false)
@@ -96,6 +99,10 @@ export default function App() {
   }, [])
   const openAgendaMenu = useCallback(() => {
     setMenuFocusSection('agenda')
+    setMenuOpen(true)
+  }, [])
+  const openFeelingsMenu = useCallback(() => {
+    setMenuFocusSection('feelings')
     setMenuOpen(true)
   }, [])
 
@@ -231,6 +238,11 @@ export default function App() {
       .length
   }, [state.dailyTodos])
 
+  const todayMoodCount = useMemo(
+    () => checkInsForDay(state.moodCheckIns ?? [], checkInDayKey()).length,
+    [state.moodCheckIns],
+  )
+
   const menuSections = useMemo(
     () => [
       {
@@ -310,6 +322,22 @@ export default function App() {
         ),
       },
       {
+        id: 'feelings' as const,
+        title: 'Feelings & energy',
+        hint: 'How are you feeling? · energy · calendar tint',
+        accent: 'amber' as const,
+        badge:
+          todayMoodCount > 0 ? (
+            <span className="section-badge">{todayMoodCount} today</span>
+          ) : undefined,
+        children: (
+          <FeelingCheckIn
+            checkIns={state.moodCheckIns ?? []}
+            onAdd={addMoodCheckIn}
+          />
+        ),
+      },
+      {
         id: 'google' as const,
         title: 'Google connect',
         hint: 'Calendar + Gmail live pull',
@@ -341,6 +369,7 @@ export default function App() {
     [
       inboxCount,
       todayTodoCount,
+      todayMoodCount,
       pendingCandidates,
       pulling,
       state.autoAddHighConfidence,
@@ -350,6 +379,7 @@ export default function App() {
       state.dailyTodos,
       state.taskGroups,
       state.events,
+      state.moodCheckIns,
       pullStatus,
       pullSources,
       scheduleCandidate,
@@ -367,6 +397,7 @@ export default function App() {
       setTodoRepeat,
       pullGroupItemToDaily,
       pullGroupItemToCalendar,
+      addMoodCheckIn,
     ],
   )
 
@@ -443,6 +474,7 @@ export default function App() {
           stacks={state.stacks}
           pet={state.pet}
           dailyTodos={state.dailyTodos ?? []}
+          moodCheckIns={state.moodCheckIns ?? []}
           onChangeStack={setEventStack}
           onChangeCategory={setEventCategory}
           onAddEntry={addManualEntry}
@@ -457,6 +489,8 @@ export default function App() {
           onToggleDailyTodo={toggleDailyTodo}
           onRemoveDailyTodo={removeDailyTodo}
           onSetTodoRepeat={setTodoRepeat}
+          onAddMoodCheckIn={addMoodCheckIn}
+          onOpenFeelings={openFeelingsMenu}
           onOpenAgenda={openAgendaMenu}
           onPull={() => void handleTopPull()}
         />

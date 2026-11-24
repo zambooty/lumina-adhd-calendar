@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type {
   CalendarEntryKind,
   CalendarEvent,
+  MoodCheckIn,
   ReminderStack,
 } from '../types'
 import { formatOffset } from '../lib/reminders'
@@ -47,12 +48,18 @@ import {
   categoryById,
   resolveEventCategory,
 } from '../lib/taskCategories'
+import {
+  buildDayTintMap,
+  checkInsForDay,
+  energyLabel,
+} from '../lib/feelings'
 
 export type CalendarViewMode = 'week' | 'month' | 'year'
 
 type Props = {
   events: CalendarEvent[]
   stacks: ReminderStack[]
+  moodCheckIns?: MoodCheckIn[]
   onChangeStack: (eventId: string, stackId: string) => void
   onChangeCategory?: (eventId: string, categoryId: string) => void
   onAddEntry?: (input: {
@@ -136,6 +143,7 @@ function applyTimeOnDay(day: Date, time: string): Date {
 export function CalendarView({
   events,
   stacks,
+  moodCheckIns = [],
   onChangeStack,
   onChangeCategory,
   onAddEntry,
@@ -147,6 +155,11 @@ export function CalendarView({
   const [sheet, setSheet] = useState<SheetState>(null)
   const [legendFilter, setLegendFilter] = useState<TaskCategoryId | 'all'>(
     'all',
+  )
+
+  const dayTints = useMemo(
+    () => buildDayTintMap(moodCheckIns),
+    [moodCheckIns],
   )
 
   const visibleEvents = useMemo(() => {
@@ -304,6 +317,7 @@ export function CalendarView({
           <MonthGrid
             cursor={cursor}
             events={visibleEvents}
+            dayTints={dayTints}
             selectedDay={sheet?.kind === 'day' || sheet?.kind === 'add' ? sheet.day : null}
             onOpenDay={openDay}
             onOpenEvent={openEvent}
@@ -312,6 +326,7 @@ export function CalendarView({
           <WeekGrid
             cursor={cursor}
             events={visibleEvents}
+            dayTints={dayTints}
             onOpenDay={openDay}
             onOpenEvent={openEvent}
           />
@@ -319,6 +334,7 @@ export function CalendarView({
           <YearGrid
             cursor={cursor}
             events={visibleEvents}
+            dayTints={dayTints}
             onOpenMonth={(month) => {
               setCursor(month)
               setMode('month')
@@ -335,6 +351,7 @@ export function CalendarView({
             dayEvents={dayEvents}
             selectedEvent={selectedEvent}
             stacks={stacks}
+            moodCheckIns={moodCheckIns}
             onChangeStack={onChangeStack}
             onChangeCategory={onChangeCategory}
             onAddEntry={onAddEntry}
@@ -371,12 +388,14 @@ export function CalendarView({
 function MonthGrid({
   cursor,
   events,
+  dayTints,
   selectedDay,
   onOpenDay,
   onOpenEvent,
 }: {
   cursor: Date
   events: CalendarEvent[]
+  dayTints: Record<string, string>
   selectedDay: Date | null
   onOpenDay: (day: Date) => void
   onOpenEvent: (id: string) => void
@@ -399,17 +418,20 @@ function MonthGrid({
       <div className="month-cells">
         {days.map((day) => {
           const dayKey = startOfDay(day)
+          const dateStr = format(dayKey, 'yyyy-MM-dd')
           const dayEvts = eventsOnDay(events, dayKey)
           const outside = isOutsideMonth(dayKey, cursor)
           const today = isToday(dayKey)
           const selected = selectedDay != null && isSameDay(dayKey, selectedDay)
+          const tint = dayTints[dateStr]
           const shown = dayEvts.slice(0, 3)
           const extra = dayEvts.length - shown.length
           return (
             <div
               key={dayKey.toISOString()}
-              className={`month-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${selected ? ' is-selected' : ''}${dayEvts.length ? ' has-events' : ''}`}
-              data-date={format(dayKey, 'yyyy-MM-dd')}
+              className={`month-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${selected ? ' is-selected' : ''}${dayEvts.length ? ' has-events' : ''}${tint ? ' has-mood-tint' : ''}`}
+              data-date={dateStr}
+              style={tint ? { backgroundImage: tint } : undefined}
             >
               <button
                 type="button"
@@ -466,11 +488,13 @@ function MonthGrid({
 function WeekGrid({
   cursor,
   events,
+  dayTints,
   onOpenDay,
   onOpenEvent,
 }: {
   cursor: Date
   events: CalendarEvent[]
+  dayTints: Record<string, string>
   onOpenDay: (day: Date) => void
   onOpenEvent: (id: string) => void
 }) {
@@ -494,11 +518,14 @@ function WeekGrid({
         <div className="week-corner" aria-hidden />
         {days.map((day) => {
           const count = eventsOnDay(rangeEvents, day).length
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const tint = dayTints[dateStr]
           return (
             <button
               key={`head-${day.toISOString()}`}
               type="button"
-              className={`week-dayhead${isToday(day) ? ' is-today' : ''}`}
+              className={`week-dayhead${isToday(day) ? ' is-today' : ''}${tint ? ' has-mood-tint' : ''}`}
+              style={tint ? { backgroundImage: tint } : undefined}
               onClick={() => onOpenDay(day)}
             >
               <span className="week-dayname">{format(day, 'EEE')}</span>
@@ -518,10 +545,13 @@ function WeekGrid({
 
         {days.map((day) => {
           const dayEvts = eventsOnDay(rangeEvents, day)
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const tint = dayTints[dateStr]
           return (
             <div
               key={`col-${day.toISOString()}`}
-              className={`week-col${isToday(day) ? ' is-today' : ''}`}
+              className={`week-col${isToday(day) ? ' is-today' : ''}${tint ? ' has-mood-tint' : ''}`}
+              style={tint ? { backgroundImage: tint } : undefined}
             >
               {HOUR_LABELS.map((h) => (
                 <div key={h} className="week-slot" />
@@ -569,11 +599,13 @@ function WeekGrid({
 function YearGrid({
   cursor,
   events,
+  dayTints,
   onOpenMonth,
   onOpenDay,
 }: {
   cursor: Date
   events: CalendarEvent[]
+  dayTints: Record<string, string>
   onOpenMonth: (month: Date) => void
   onOpenDay: (day: Date) => void
 }) {
@@ -603,12 +635,15 @@ function YearGrid({
                 const outside = !isSameMonth(day, month)
                 const count = outside ? 0 : eventsOnDay(events, day).length
                 const today = isToday(day)
+                const dateStr = format(day, 'yyyy-MM-dd')
+                const tint = !outside ? dayTints[dateStr] : undefined
                 return (
                   <button
                     key={day.toISOString()}
                     type="button"
                     disabled={outside}
-                    className={`year-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${count ? ' has-events' : ''}`}
+                    className={`year-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${count ? ' has-events' : ''}${tint ? ' has-mood-tint' : ''}`}
+                    style={tint ? { backgroundImage: tint } : undefined}
                     onClick={() => onOpenDay(day)}
                     aria-label={
                       outside
@@ -640,6 +675,7 @@ function DetailSheet({
   dayEvents,
   selectedEvent,
   stacks,
+  moodCheckIns,
   onChangeStack,
   onChangeCategory,
   onAddEntry,
@@ -654,6 +690,7 @@ function DetailSheet({
   dayEvents: CalendarEvent[]
   selectedEvent: CalendarEvent | null
   stacks: ReminderStack[]
+  moodCheckIns: MoodCheckIn[]
   onChangeStack: (eventId: string, stackId: string) => void
   onChangeCategory?: (eventId: string, categoryId: string) => void
   onAddEntry?: (input: {
@@ -680,6 +717,10 @@ function DetailSheet({
   const selectedCat = selectedEvent
     ? resolveEventCategory(selectedEvent)
     : null
+  const dayMood =
+    day != null
+      ? checkInsForDay(moodCheckIns, format(day, 'yyyy-MM-dd'))
+      : []
 
   return (
     <motion.div
@@ -864,6 +905,16 @@ function DetailSheet({
                 ? 'Nothing scheduled — breathe.'
                 : `${dayEvents.length} item${dayEvents.length === 1 ? '' : 's'}`}
             </p>
+
+            {dayMood.length > 0 && (
+              <div className="cal-day-mood" aria-label="Feeling check-ins">
+                {dayMood.map((c) => (
+                  <span key={c.id} className="cal-day-mood-chip">
+                    {c.feelingLabel} · {energyLabel(c.energy)}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {onAddEntry && (
               <button

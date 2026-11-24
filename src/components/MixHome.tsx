@@ -3,6 +3,9 @@ import type {
   CalendarEntryKind,
   CalendarEvent,
   DailyTodo,
+  EnergyLevel,
+  FeelingCategoryId,
+  MoodCheckIn,
   PetState,
   ReminderStack,
   TodoRepeat,
@@ -22,12 +25,14 @@ import { CalendarView } from './CalendarView'
 import { UpcomingList } from './UpcomingList'
 import { DailyTodoList } from './DailyTodoList'
 import { ConnectPullGuide } from './ConnectPullGuide'
+import { FeelingCheckIn } from './FeelingCheckIn'
 
 type Props = {
   events: CalendarEvent[]
   stacks: ReminderStack[]
   pet: PetState
   dailyTodos?: DailyTodo[]
+  moodCheckIns?: MoodCheckIn[]
   onChangeStack: (eventId: string, stackId: string) => void
   onChangeCategory?: (eventId: string, categoryId: string) => void
   onAddEntry?: (input: {
@@ -50,6 +55,14 @@ type Props = {
   onToggleDailyTodo?: (todoId: string) => void
   onRemoveDailyTodo?: (todoId: string) => void
   onSetTodoRepeat?: (todoId: string, repeat: TodoRepeat) => void
+  onAddMoodCheckIn?: (input: {
+    categoryId: FeelingCategoryId
+    feelingId: string
+    feelingLabel: string
+    energy: EnergyLevel
+    date?: string
+  }) => void
+  onOpenFeelings?: () => void
   onOpenAgenda?: () => void
   onPull?: () => void | Promise<void>
 }
@@ -59,6 +72,7 @@ export function MixHome({
   stacks,
   pet,
   dailyTodos = [],
+  moodCheckIns = [],
   onChangeStack,
   onChangeCategory,
   onAddEntry,
@@ -70,6 +84,8 @@ export function MixHome({
   onToggleDailyTodo,
   onRemoveDailyTodo,
   onSetTodoRepeat,
+  onAddMoodCheckIn,
+  onOpenFeelings,
   onOpenAgenda,
   onPull,
 }: Props) {
@@ -186,9 +202,19 @@ export function MixHome({
           ))}
         </div>
 
+        {onAddMoodCheckIn && (
+          <FeelingCheckIn
+            checkIns={moodCheckIns}
+            compact
+            onAdd={onAddMoodCheckIn}
+            onOpenFull={onOpenFeelings}
+          />
+        )}
+
         <CalendarView
           events={events}
           stacks={stacks}
+          moodCheckIns={moodCheckIns}
           onChangeStack={onChangeStack}
           onChangeCategory={onChangeCategory}
           onAddEntry={onAddEntry}

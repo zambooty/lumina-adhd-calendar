@@ -121,6 +121,30 @@ export type TaskGroup = {
   items: TaskGroupItem[]
 }
 
+/** Broad feeling bucket (tap → specific feelings). */
+export type FeelingCategoryId =
+  | 'good'
+  | 'calm'
+  | 'okay'
+  | 'tired'
+  | 'stressed'
+  | 'low'
+
+/** 1 = drained … 5 = buzzing. */
+export type EnergyLevel = 1 | 2 | 3 | 4 | 5
+
+/** One feeling + energy snapshot on a local calendar day. */
+export type MoodCheckIn = {
+  id: string
+  /** Local day key yyyy-MM-dd */
+  date: string
+  categoryId: FeelingCategoryId
+  feelingId: string
+  feelingLabel: string
+  energy: EnergyLevel
+  createdAt: string
+}
+
 export type AppState = {
   events: CalendarEvent[]
   candidates: EventCandidate[]
@@ -141,6 +165,8 @@ export type AppState = {
   todoTemplates: TodoTemplate[]
   /** Per-day todo instances (including one-offs). */
   dailyTodos: DailyTodo[]
+  /** Feeling + energy check-ins (tint calendar days). */
+  moodCheckIns: MoodCheckIn[]
 }
 
 export type { SourceConnector, ConnectorPullResult } from './connectors/types'

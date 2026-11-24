@@ -5,7 +5,10 @@ import type {
   CalendarEntryKind,
   CalendarEvent,
   DailyTodo,
+  EnergyLevel,
   EventCandidate,
+  FeelingCategoryId,
+  MoodCheckIn,
   ReminderOffset,
   ReminderStack,
   TaskGroupItem,
@@ -37,6 +40,7 @@ import {
   materializeTemplates,
   parseDayKey,
 } from '../lib/dailyTodos'
+import { checkInDayKey } from '../lib/feelings'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
@@ -721,6 +725,38 @@ export function useAppState() {
     [flash],
   )
 
+  const addMoodCheckIn = useCallback(
+    (input: {
+      categoryId: FeelingCategoryId
+      feelingId: string
+      feelingLabel: string
+      energy: EnergyLevel
+      date?: string
+    }) => {
+      const date = input.date ?? checkInDayKey()
+      const entry: MoodCheckIn = {
+        id: uid('mood'),
+        date,
+        categoryId: input.categoryId,
+        feelingId: input.feelingId,
+        feelingLabel: input.feelingLabel,
+        energy: input.energy,
+        createdAt: new Date().toISOString(),
+      }
+      setState((s) => ({
+        ...s,
+        moodCheckIns: [...(s.moodCheckIns ?? []), entry],
+        pet: {
+          ...s.pet,
+          eventsScheduled: s.pet.eventsScheduled + 1,
+          lastReactedAt: new Date().toISOString(),
+        },
+      }))
+      flash(`Feeling logged · ${input.feelingLabel}`)
+    },
+    [flash],
+  )
+
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
     [state.candidates],
@@ -764,5 +800,6 @@ export function useAppState() {
     setTodoRepeat,
     pullGroupItemToDaily,
     pullGroupItemToCalendar,
+    addMoodCheckIn,
   }
 }
