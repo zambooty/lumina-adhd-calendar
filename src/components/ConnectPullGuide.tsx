@@ -53,34 +53,32 @@ export function ConnectPullGuide({ compact, onPull, className }: Props) {
 
       <p className="connect-pull-copy">
         {demo
-          ? 'Demo mode — Pull sample appointments, or bind Google later.'
+          ? 'Demo mode — Pull samples, or bind Google later.'
           : connected
-            ? 'Signed in — Pull Calendar + Gmail into LUMINA.'
-            : compact
-              ? 'Connect Google, then Pull.'
-              : 'Nothing next yet. Connect Google, then Pull.'}
+            ? 'Signed in — Pull Calendar + Gmail.'
+            : 'Connect Google, then Pull.'}
       </p>
 
       <div className="connect-pull-actions">
-        {!demo && !connected && (
+        {!demo && !connected ? (
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary"
             onClick={() => void connect()}
             disabled={busy}
           >
             {busy ? 'Connecting…' : 'Connect Google'}
           </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void handlePull()}
+            disabled={pulling}
+          >
+            {pulling ? 'Pulling…' : 'Pull'}
+          </button>
         )}
-        <button
-          type="button"
-          className={`btn btn-sm ${ready ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => void handlePull()}
-          disabled={pulling || (!ready && !demo)}
-          title={!ready && !demo ? 'Connect Google first' : undefined}
-        >
-          {pulling ? 'Pulling…' : 'Pull'}
-        </button>
       </div>
 
       {hint && !error && (

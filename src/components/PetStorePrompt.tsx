@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect } from 'react'
 import type { PetStoreCatalogItem } from '../lib/petStore'
 
 type Props = {
@@ -8,15 +9,27 @@ type Props = {
   onDismiss: () => void
 }
 
-/** Soft prompt when new store items unlock with companion growth. */
+/** Soft prompt when new store items unlock — never blocks Pull / day sheet. */
 export function PetStorePrompt({
   items,
   spark,
   onOpenStore,
   onDismiss,
 }: Props) {
+  useEffect(() => {
+    if (!items.length) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onDismiss()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [items.length, onDismiss])
+
   if (!items.length) return null
-  const top = items.slice(0, 3)
+  const top = items.slice(0, 2)
   const extra = items.length - top.length
 
   return (
@@ -30,11 +43,11 @@ export function PetStorePrompt({
         transition={{ type: 'spring', stiffness: 380, damping: 28 }}
       >
         <div className="pet-store-prompt-glow" aria-hidden />
-        <p className="pet-store-prompt-kicker">New in the store</p>
+        <p className="pet-store-prompt-kicker">Store</p>
         <h3 className="pet-store-prompt-title">
           {items.length === 1
             ? `${items[0].name} unlocked`
-            : `${items.length} new looks unlocked`}
+            : `${items.length} new looks`}
         </h3>
         <ul className="pet-store-prompt-list">
           {top.map((item) => (
@@ -48,7 +61,7 @@ export function PetStorePrompt({
                 {item.name}
                 <em>
                   {spark >= item.price
-                    ? ` · ${item.price} spark`
+                    ? ` · ${item.price}`
                     : ` · need ${item.price}`}
                 </em>
               </span>
@@ -57,11 +70,11 @@ export function PetStorePrompt({
           {extra > 0 && <li className="pet-store-prompt-more">+{extra} more</li>}
         </ul>
         <div className="pet-store-prompt-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={onOpenStore}>
-            Open store
-          </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onDismiss}>
             Later
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={onOpenStore}>
+            Open store
           </button>
         </div>
       </motion.div>

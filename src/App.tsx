@@ -134,10 +134,6 @@ export default function App() {
     setMenuFocusSection('agenda')
     setMenuOpen(true)
   }, [])
-  const openFeelingsMenu = useCallback(() => {
-    setMenuFocusSection('feelings')
-    setMenuOpen(true)
-  }, [])
   const openStoreMenu = useCallback(() => {
     setStorePromptOpen(false)
     dismissPetStorePrompts()
@@ -308,7 +304,7 @@ export default function App() {
       {
         id: 'inbox' as const,
         title: 'Source inbox',
-        hint: 'Appointments waiting to land on your calendar',
+        hint: 'Pulled items waiting to land',
         accent: 'coral' as const,
         badge:
           inboxCount > 0 ? (
@@ -334,7 +330,7 @@ export default function App() {
       {
         id: 'todos' as const,
         title: 'Daily todos',
-        hint: 'Today’s list · repeatable tasks',
+        hint: 'Today’s list',
         accent: 'cyan' as const,
         badge:
           todayTodoCount > 0 ? (
@@ -354,7 +350,7 @@ export default function App() {
       {
         id: 'groups' as const,
         title: 'Task groups',
-        hint: 'Health, hygiene, fitness + more → daily or calendar',
+        hint: 'Health · hygiene · fitness…',
         accent: 'sky' as const,
         children: (
           <TaskGroupsPanel
@@ -367,7 +363,7 @@ export default function App() {
       {
         id: 'agenda' as const,
         title: 'Agenda & review',
-        hint: 'Day agenda + monthly task check-in',
+        hint: 'Day + monthly check-in',
         accent: 'lime' as const,
         children: (
           <AgendaView
@@ -385,7 +381,7 @@ export default function App() {
       {
         id: 'goals' as const,
         title: 'Goals',
-        hint: 'Weekly · monthly · yearly · task groups count',
+        hint: 'Week · month · year',
         accent: 'amber' as const,
         badge:
           goalNudgeCount > 0 ? (
@@ -405,7 +401,7 @@ export default function App() {
       {
         id: 'journal' as const,
         title: 'Journal',
-        hint: 'Goal prompts · keywords · feelings',
+        hint: 'Prompts + keywords',
         accent: 'coral' as const,
         children: (
           <JournalPanel
@@ -419,7 +415,7 @@ export default function App() {
       {
         id: 'habits' as const,
         title: 'Habits & reports',
-        hint: 'Completions · moods · energy · keywords',
+        hint: 'Moods · energy · done',
         accent: 'cyan' as const,
         children: (
           <HabitsReportsPanel
@@ -435,7 +431,7 @@ export default function App() {
       {
         id: 'feelings' as const,
         title: 'Feelings & energy',
-        hint: 'How are you feeling? · energy · calendar tint',
+        hint: 'Check-in · calendar tint',
         accent: 'amber' as const,
         badge:
           todayMoodCount > 0 ? (
@@ -451,14 +447,14 @@ export default function App() {
       {
         id: 'google' as const,
         title: 'Google connect',
-        hint: 'Calendar + Gmail live pull',
+        hint: 'Calendar + Gmail',
         accent: 'sky' as const,
         children: <GoogleConnect />,
       },
       {
         id: 'reminders' as const,
         title: 'Auto reminders',
-        hint: 'Friendly defaults · leave-now included',
+        hint: 'Friendly defaults',
         accent: 'lime' as const,
         children: (
           <AutoRemindersPanel
@@ -472,7 +468,7 @@ export default function App() {
       {
         id: 'blink' as const,
         title: 'Blink',
-        hint: 'Floating pet · grows from pulls, tasks, journal & moods',
+        hint: 'Pet · grows with you',
         accent: 'amber' as const,
         children: (
           <CompanionPet
@@ -486,7 +482,7 @@ export default function App() {
       {
         id: 'store' as const,
         title: 'Pet store',
-        hint: 'Spark · skins · animals · clothes · pet-for-pet',
+        hint: 'Sparks · looks · skins',
         accent: 'coral' as const,
         badge:
           storeBadgeCount > 0 ? (
@@ -644,7 +640,6 @@ export default function App() {
           onRemoveDailyTodo={removeDailyTodo}
           onSetTodoRepeat={setTodoRepeat}
           onAddMoodCheckIn={addMoodCheckIn}
-          onOpenFeelings={openFeelingsMenu}
           onOpenAgenda={openAgendaMenu}
           onPull={() => void handleTopPull()}
         />
@@ -726,7 +721,13 @@ export default function App() {
         onCheckAgain={() => void runUpdateCheck({ forceSheet: true })}
       />
 
-      {storePromptOpen && newStoreItems.length > 0 && !menuOpen && !petScreenOpen && (
+      {storePromptOpen &&
+        newStoreItems.length > 0 &&
+        !menuOpen &&
+        !petScreenOpen &&
+        !pullSheetOpen &&
+        !leaveMomentOpen &&
+        !updateOpen && (
         <PetStorePrompt
           items={newStoreItems}
           spark={petStore.spark}
@@ -741,7 +742,14 @@ export default function App() {
       <FloatingPetButton
         pet={state.pet}
         onOpen={openPetScreen}
-        hidden={menuOpen || petScreenOpen || pullSheetOpen || leaveMomentOpen || storePromptOpen}
+        hidden={
+          menuOpen ||
+          petScreenOpen ||
+          pullSheetOpen ||
+          leaveMomentOpen ||
+          updateOpen ||
+          (storePromptOpen && newStoreItems.length > 0)
+        }
       />
 
       <PetScreen

@@ -22,7 +22,6 @@ type Props = {
     energy: EnergyLevel
     date?: string
   }) => void
-  onOpenFull?: () => void
 }
 
 type Step =
@@ -40,7 +39,6 @@ export function FeelingCheckIn({
   checkIns,
   compact = false,
   onAdd,
-  onOpenFull,
 }: Props) {
   const dateKey = dayKey()
   const today = useMemo(
@@ -48,7 +46,8 @@ export function FeelingCheckIn({
     [checkIns, dateKey],
   )
   const [step, setStep] = useState<Step>({ kind: 'categories' })
-  const [expanded, setExpanded] = useState(!compact || today.length === 0)
+  // Compact home: stay collapsed until tapped — don't bury calendar under 6 vibes.
+  const [expanded, setExpanded] = useState(!compact)
 
   function reset() {
     setStep({ kind: 'categories' })
@@ -87,7 +86,7 @@ export function FeelingCheckIn({
                 ? `Today · ${latest.feelingLabel} · ${energyLabel(latest.energy)}${
                     today.length > 1 ? ` · ${today.length} check-ins` : ''
                   }`
-                : 'One tap starts — broad mood, then a specific word.'}
+                : 'Optional — tap when you want a check-in.'}
             </p>
           </div>
           <button
@@ -114,15 +113,6 @@ export function FeelingCheckIn({
             ))}
           </div>
         )}
-        {onOpenFull && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm feel-open-full"
-            onClick={onOpenFull}
-          >
-            Open feelings
-          </button>
-        )}
       </section>
     )
   }
@@ -135,9 +125,7 @@ export function FeelingCheckIn({
       {!compact && (
         <div className="feeling-checkin-intro">
           <p>
-            How are you feeling? Pick a broad vibe, then a specific word — and
-            your energy. Days tint on the calendar; multiple check-ins blend
-            left → right.
+            Broad vibe → specific word → energy. Days tint on the calendar.
           </p>
         </div>
       )}
@@ -147,13 +135,13 @@ export function FeelingCheckIn({
           <div>
             <h2 className="mix-rail-title">How are you feeling?</h2>
             <p className="mix-rail-hint">
-              {step.kind === 'categories' && 'Tap a broad vibe to start.'}
-              {step.kind === 'feelings' && 'Pick the word that fits.'}
-              {step.kind === 'energy' && 'How’s your energy right now?'}
-              {step.kind === 'done' && 'Logged — calendar will tint.'}
+              {step.kind === 'categories' && 'Pick a vibe.'}
+              {step.kind === 'feelings' && 'Pick a word.'}
+              {step.kind === 'energy' && 'Energy level?'}
+              {step.kind === 'done' && 'Logged — day will tint.'}
             </p>
           </div>
-          {step.kind === 'categories' && today.length > 0 && (
+          {step.kind === 'categories' && (
             <button
               type="button"
               className="btn btn-ghost btn-sm"

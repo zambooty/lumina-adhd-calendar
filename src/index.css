@@ -392,8 +392,9 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 36px;
-  padding: 0.25rem 0.65rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
@@ -1102,15 +1103,17 @@ a {
   top: max(0.65rem, env(safe-area-inset-top, 0px));
   right: max(0.75rem, env(safe-area-inset-right, 0px));
   z-index: 2;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: 14px;
   border: 1px solid var(--glass-border);
   background: var(--glass-fill);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: var(--text);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -1122,7 +1125,7 @@ a {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 1.15rem 1.15rem 1.5rem;
-  padding-right: max(1.15rem, calc(env(safe-area-inset-right, 0px) + 3.25rem));
+  padding-right: max(1.15rem, calc(env(safe-area-inset-right, 0px) + 3.75rem));
 }
 
 .app-menu-list {
@@ -1330,12 +1333,6 @@ a {
     align-items: flex-start;
   }
 
-  .toast {
-    white-space: normal;
-    border-radius: 16px;
-    text-align: center;
-    line-height: 1.35;
-  }
 }
 
 .panel {
@@ -1423,9 +1420,27 @@ a {
 }
 
 .btn-sm {
-  padding: 0.45rem 0.8rem;
-  min-height: 40px;
+  padding: 0.5rem 0.85rem;
+  min-height: 44px;
   font-size: 0.8rem;
+}
+
+/* Clear focus on dark glass — default outline vanishes */
+.btn:focus-visible,
+.app-menu-list-item:focus-visible,
+.app-menu-dismiss:focus-visible,
+.cal-tab:focus-visible,
+.cal-legend-chip:focus-visible,
+.cal-nav-btn:focus-visible,
+.menu-trigger:focus-visible,
+.floating-pet-fab:focus-visible,
+.feel-cat-chip:focus-visible,
+.feel-spec-chip:focus-visible,
+.feel-energy-chip:focus-visible,
+.month-cell:focus-visible,
+.year-cell:not(.is-outside):focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
 }
 
 .chip {
@@ -1511,22 +1526,24 @@ a {
 
 .toast {
   position: fixed;
-  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
   padding: 0.75rem 1.15rem;
-  border-radius: 999px;
+  border-radius: 16px;
   background: rgba(12, 18, 28, 0.95);
   border: 1px solid rgba(61, 255, 212, 0.35);
   box-shadow: 0 0 30px var(--glow-cyan);
   font-weight: 600;
   font-size: 0.9rem;
-  white-space: nowrap;
-  max-width: min(28rem, calc(100vw - 2rem));
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+  max-width: min(22rem, calc(100vw - 2rem));
   width: max-content;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 .hero-screen {
@@ -2955,6 +2972,8 @@ a {
   flex-direction: column;
   gap: 0.85rem;
   min-width: 0;
+  /* Keep last mood / todos clear of floating pet FAB */
+  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .mix-glass {
@@ -3498,6 +3517,13 @@ a {
   text-align: center;
   font-size: 0.72rem;
   color: var(--text-dim);
+}
+
+/* Touch: keyboard hint is noise */
+@media (pointer: coarse) {
+  .pull-decision-a11y-hint {
+    display: none;
+  }
 }
 
 .pull-blink-row {
@@ -5350,11 +5376,11 @@ a {
   position: fixed;
   left: 1rem;
   right: 1rem;
-  bottom: 1.25rem;
-  z-index: 60;
-  max-width: 22rem;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  max-width: 20rem;
   margin: 0 auto;
-  padding: 1rem 1.05rem 0.95rem;
+  padding: 0.85rem 0.95rem 0.85rem;
   border-radius: 1.15rem;
   border: 1px solid rgba(255, 92, 108, 0.4);
   background:
@@ -5434,6 +5460,11 @@ a {
   position: relative;
   display: flex;
   gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.pet-store-prompt-actions .btn {
+  flex: 1;
 }
 
 @media (max-width: 520px) {

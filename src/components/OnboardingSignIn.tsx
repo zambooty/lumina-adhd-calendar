@@ -96,10 +96,9 @@ export function OnboardingSignIn({ onEnter, onPullAndEnter }: Props) {
               transition={{ duration: 0.35 }}
             >
               <p className="onboarding-kicker">ADHD calendar companion</p>
-              <h2 className="onboarding-title">Sign in to pull appointments</h2>
+              <h2 className="onboarding-title">Meet LUMINA</h2>
               <p className="onboarding-copy">
-                Connect Google (Calendar + Gmail), then Pull. Short steps — no
-                demo tour.
+                Connect Google, then Pull. Short steps — no demo tour.
               </p>
               <div className="onboarding-actions">
                 <button
@@ -123,11 +122,11 @@ export function OnboardingSignIn({ onEnter, onPullAndEnter }: Props) {
               transition={{ duration: 0.35 }}
             >
               <p className="onboarding-kicker">Step 2</p>
-              <h2 className="onboarding-title">Connect an account</h2>
+              <h2 className="onboarding-title">Connect Google</h2>
               <p className="onboarding-copy">
                 {demo
-                  ? 'Google secrets aren’t bound yet — you can still open the app and use demo Pull.'
-                  : 'Google first. Calendar + Gmail open together. More accounts later.'}
+                  ? 'Demo Pull works now — bind Google later from the menu.'
+                  : 'Calendar + Gmail open together.'}
               </p>
 
               <ul className="onboarding-account-list">
@@ -153,13 +152,6 @@ export function OnboardingSignIn({ onEnter, onPullAndEnter }: Props) {
                       {busy ? 'Connecting…' : 'Connect Google'}
                     </button>
                   )}
-                </li>
-                <li className="onboarding-account-row is-soon" aria-disabled>
-                  <div>
-                    <p className="onboarding-account-name">More accounts</p>
-                    <p className="onboarding-account-hint">Coming later</p>
-                  </div>
-                  <span className="mode-chip">Soon</span>
                 </li>
               </ul>
 
@@ -204,10 +196,10 @@ export function OnboardingSignIn({ onEnter, onPullAndEnter }: Props) {
               </h2>
               <p className="onboarding-copy">
                 {connected
-                  ? 'Tap Pull to load Calendar + Gmail into LUMINA. You can Pull again anytime from the top bar.'
+                  ? 'Pull Calendar + Gmail now — or open the calendar first.'
                   : demo
-                    ? 'Demo mode uses sample appointments. Connect Google later from the menu.'
-                    : 'Connect Google anytime from Menu → Google connect, then Pull.'}
+                    ? 'Demo Pull uses samples. Connect Google later from the menu.'
+                    : 'Connect Google anytime from Menu → Google, then Pull.'}
               </p>
               <div className="onboarding-actions">
                 <button

@@ -62,7 +62,6 @@ type Props = {
     energy: EnergyLevel
     date?: string
   }) => void
-  onOpenFeelings?: () => void
   onOpenAgenda?: () => void
   onPull?: () => void | Promise<void>
 }
@@ -85,7 +84,6 @@ export function MixHome({
   onRemoveDailyTodo,
   onSetTodoRepeat,
   onAddMoodCheckIn,
-  onOpenFeelings,
   onOpenAgenda,
   onPull,
 }: Props) {
@@ -202,15 +200,6 @@ export function MixHome({
           ))}
         </div>
 
-        {onAddMoodCheckIn && (
-          <FeelingCheckIn
-            checkIns={moodCheckIns}
-            compact
-            onAdd={onAddMoodCheckIn}
-            onOpenFull={onOpenFeelings}
-          />
-        )}
-
         <CalendarView
           events={events}
           stacks={stacks}
@@ -225,7 +214,7 @@ export function MixHome({
         <section className="mix-glass mix-upcoming" aria-label="Upcoming">
           <div className="mix-upcoming-head">
             <h2 className="mix-rail-title">Upcoming</h2>
-            <p className="mix-rail-hint">What&apos;s next — reminders included.</p>
+            <p className="mix-rail-hint">What&apos;s next.</p>
           </div>
           <div className="mix-upcoming-body">
             <UpcomingList
@@ -247,7 +236,7 @@ export function MixHome({
                 <h2 className="mix-rail-title">Today&apos;s todos</h2>
                 <p className="mix-rail-hint">
                   {todayTodos.length === 0
-                    ? 'Quick wins for today — pull from task groups in the menu.'
+                    ? 'Quick wins — or open Task groups.'
                     : `${todayDone} of ${todayTodos.length} done`}
                 </p>
               </div>
@@ -270,20 +259,20 @@ export function MixHome({
               onRemove={onRemoveDailyTodo}
               onSetRepeat={onSetTodoRepeat}
             />
-            {todayTodos.length === 0 && (
-              <p className="mix-rail-empty">
-                Open menu → Daily todos or Task groups to start.
-              </p>
-            )}
           </section>
+        )}
+
+        {onAddMoodCheckIn && (
+          <FeelingCheckIn
+            checkIns={moodCheckIns}
+            compact
+            onAdd={onAddMoodCheckIn}
+          />
         )}
 
         <div className="mix-whisper mix-whisper--mobile" aria-live="polite">
           <span className="mix-whisper-orb" aria-hidden />
-          <span>
-            Blink glowing · {xp} XP
-            <span className="mix-whisper-extra"> · tap the floating pet</span>
-          </span>
+          <span>Blink · {xp} XP</span>
         </div>
       </div>
 

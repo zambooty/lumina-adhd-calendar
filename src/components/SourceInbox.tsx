@@ -152,9 +152,7 @@ export function SourceInbox({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            Inbox clear. On Android, Allow SMS on Pull (or paste/share a
-            thread). Connect Google for Calendar + Gmail — live mode skips demo
-            fillers.
+            Inbox clear. Connect Google, then Pull.
           </motion.p>
         )}
       </AnimatePresence>
