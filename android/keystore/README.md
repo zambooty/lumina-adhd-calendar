@@ -7,6 +7,15 @@ publish package.
 (`~/.android/debug.keystore`). No passwords belong in the repo.
 
 **Optional shared Cap keystore** (in-place sideload updates across machines):
-generate a keystore on your machine only, never commit it, and never put
-passwords in tracked Gradle files. If install says “package conflicts,”
-uninstall once, then install the new APK.
+
+1. Place `lumina-debug.keystore` here (gitignored) — never commit it.
+2. Set credentials only in gitignored `android/local.properties`:
+
+```
+lumina.debug.storeFile=keystore/lumina-debug.keystore
+lumina.debug.storePassword=…
+lumina.debug.keyAlias=…
+lumina.debug.keyPassword=…
+```
+
+If install says “package conflicts,” uninstall once, then install the new APK.

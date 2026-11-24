@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+// Optional Cap debug signing — credentials live only in gitignored
+// android/local.properties (never commit passwords or the keystore file).
+def luminaLocalProps = new Properties()
+def luminaLocalFile = rootProject.file('local.properties')
+if (luminaLocalFile.exists()) {
+    luminaLocalFile.withInputStream { luminaLocalProps.load(it) }
+}
+def luminaDebugStoreRel = luminaLocalProps.getProperty('lumina.debug.storeFile', 'keystore/lumina-debug.keystore')
+def luminaDebugStoreFile = rootProject.file(luminaDebugStoreRel)
+def luminaDebugStorePassword = luminaLocalProps.getProperty('lumina.debug.storePassword', '')
+def luminaDebugKeyAlias = luminaLocalProps.getProperty('lumina.debug.keyAlias', '')
+def luminaDebugKeyPassword = luminaLocalProps.getProperty('lumina.debug.keyPassword', '')
+def luminaHasDebugSigning =
+    luminaDebugStoreFile.isFile() &&
+    luminaDebugStorePassword &&
+    luminaDebugKeyAlias &&
+    luminaDebugKeyPassword
+
 android {
     namespace = "com.makesoft.lumina"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,8 +26,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump on every published APK; in-app updater compares this to GitHub / android-latest.json
-        versionCode 5
-        versionName "1.1.3-debug"
+        versionCode 6
+        versionName "1.1.4-debug"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,11 +35,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Debug builds use the Android SDK default debug keystore (~/.android/debug.keystore).
-    // Do not commit a custom keystore or plaintext passwords — that ships in the web package.
-    // Optional shared Cap signing for in-place updates: keep a keystore only on the build
-    // machine (never in git) and wire it via a local, gitignored Gradle init script if needed.
+    // Prefer shared Cap keystore via gitignored local.properties when present (in-place updates).
+    // Otherwise Android SDK default ~/.android/debug.keystore. Never commit keystores or passwords.
+    if (luminaHasDebugSigning) {
+        signingConfigs {
+            debug {
+                storeFile luminaDebugStoreFile
+                storePassword luminaDebugStorePassword
+                keyAlias luminaDebugKeyAlias
+                keyPassword luminaDebugKeyPassword
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (luminaHasDebugSigning) {
+                signingConfig signingConfigs.debug
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

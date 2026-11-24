@@ -1,12 +1,12 @@
 {
-  "versionCode": 5,
-  "versionName": "1.1.3-debug",
-  "tag": "android-debug-2026-11-24-1.1.3",
+  "versionCode": 6,
+  "versionName": "1.1.4-debug",
+  "tag": "android-debug-2026-11-24-1.1.4",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.3/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.3",
-  "sha256": "65becce3efabd3c50e5b0afacfd387dfb8bc56fd8b02dec2d76de15b67742bcb",
-  "publishedAt": "2026-11-24T15:42:31Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.4/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.4",
+  "sha256": "fea502e34693492680807fbdc84011a7be417a6c5d5dee84692510c1e8c20cb5",
+  "publishedAt": "2026-11-24T18:17:00Z",
   "channel": "debug",
-  "notes": "Android debug 1.1.3 (versionCode 5) — APK URL allowlist + required SHA-256; web security hardenings."
+  "notes": "Android debug 1.1.4 (versionCode 6) — Phase 4 floating pet + home widgets (WidgetSync) + ADHD UX polish."
 }
