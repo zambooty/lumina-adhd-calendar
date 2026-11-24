@@ -7,7 +7,9 @@ import {
   parseExchangeBody,
   parseRefreshBody,
   safeOAuthErrorCode,
+  sealRefreshToken,
   tokenSuccessBody,
+  unsealRefreshToken,
 } from '../server/googleTokenSecurity.ts'
 import { resetRateLimits, takeRateLimit } from '../server/rateLimit.ts'
 import { PUBLISHED_APP_ORIGIN } from '../server/originAllowlist.ts'
@@ -117,8 +119,9 @@ assert.equal(
   'upstream_error',
 )
 
-// Success body strips unknown keys (id_token etc.)
+// Success body strips unknown keys (id_token etc.) and seals refresh
 {
+  const secret = 'test-client-secret'
   const body = tokenSuccessBody(
     {
       access_token: 'ya29.a',
@@ -129,7 +132,7 @@ assert.equal(
       id_token: 'should-not-leak',
       weird: true,
     },
-    { includeRefresh: true },
+    { includeRefresh: true, sealSecret: secret },
   )
   assert.deepEqual(Object.keys(body).sort(), [
     'accessToken',
@@ -138,8 +141,19 @@ assert.equal(
     'scope',
     'tokenType',
   ])
-  assert.equal(body.refreshToken, '1//r')
+  assert.notEqual(body.refreshToken, '1//r')
+  assert.equal(unsealRefreshToken(String(body.refreshToken), secret), '1//r')
+  assert.equal(unsealRefreshToken('1//r', secret), null)
   assert.equal('id_token' in body, false)
+}
+
+// Seal round-trip + tamper reject
+{
+  const secret = 'test-client-secret'
+  const sealed = sealRefreshToken('1//refresh.abc', secret)
+  assert.equal(unsealRefreshToken(sealed, secret), '1//refresh.abc')
+  assert.equal(unsealRefreshToken(sealed.slice(0, -2) + 'aa', secret), null)
+  assert.equal(unsealRefreshToken(sealed, 'other-secret'), null)
 }
 
 // Rate limiter

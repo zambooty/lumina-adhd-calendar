@@ -9,16 +9,20 @@ import {
   jsonWithCors,
   withCors,
 } from '../../server/cors.js'
-import { fetchGithubReleaseAsset } from '../../server/androidUpdate.js'
+import {
+  MAX_APK_PROXY_BYTES,
+  fetchGithubReleaseAsset,
+} from '../../server/androidUpdate.js'
 
 /**
  * GET /api/android/apk?tag=&asset= — stream APK from GitHub Releases.
  * Public assets need no token; optional GITHUB_TOKEN is a rate-limit / private fallback.
+ * Hard size cap + tighter rate limit to avoid unbounded egress.
  */
 export async function GET(request: Request): Promise<Response> {
   const limit = takeRateLimit(
     `android-apk:${clientKeyFromRequest(request)}`,
-    20,
+    8,
     60_000,
   )
   if (!limit.allowed) {
@@ -42,6 +46,18 @@ export async function GET(request: Request): Promise<Response> {
     )
   }
 
+  if (result.size != null && result.size > MAX_APK_PROXY_BYTES) {
+    return jsonWithCors(
+      request,
+      {
+        ok: false,
+        error: 'apk_too_large',
+        hint: 'APK exceeds the proxy size limit.',
+      },
+      { status: 413 },
+    )
+  }
+
   const headers = new Headers()
   const cors = withCors(request, { headers: { ...NO_STORE } }).headers
   if (cors) {
@@ -57,6 +73,7 @@ export async function GET(request: Request): Promise<Response> {
     headers.set('content-length', String(result.size))
   }
   headers.set('cache-control', 'private, no-store')
+  headers.set('x-lumina-apk-max-bytes', String(MAX_APK_PROXY_BYTES))
 
   return new Response(result.body, { status: 200, headers })
 }

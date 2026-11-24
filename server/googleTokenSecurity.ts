@@ -1,8 +1,13 @@
 /**
  * Shared hardening helpers for /api/google/exchange + /api/google/refresh.
  * No tokens / secrets in logs or error bodies.
+ *
+ * Refresh tokens returned to the client are HMAC-sealed with the server
+ * client secret so /api/google/refresh cannot be used as an open proxy for
+ * arbitrary Google refresh tokens.
  */
 
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import {
   isAllowedRedirectUri,
   type OriginCheckHeaders,
@@ -24,8 +29,10 @@ const SAFE_OAUTH_ERRORS = new Set([
 ])
 
 const MAX_CODE_LEN = 2048
-const MAX_REFRESH_TOKEN_LEN = 4096
+/** Sealed blobs are larger than raw Google refresh tokens. */
+const MAX_REFRESH_TOKEN_LEN = 8192
 const MAX_REDIRECT_URI_LEN = 512
+const REFRESH_SEAL_PREFIX = 'lumina_rt1.'
 
 function envInt(name: string, fallback: number): number {
   const raw = (process.env[name] ?? '').trim()
@@ -200,7 +207,7 @@ export function parseRefreshBody(body: unknown): RefreshBody {
 /** Success token JSON — only expected fields; never forward unknown Google keys. */
 export function tokenSuccessBody(
   payload: Record<string, unknown>,
-  opts: { includeRefresh: boolean },
+  opts: { includeRefresh: boolean; sealSecret?: string },
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     accessToken: typeof payload.access_token === 'string' ? payload.access_token : null,
@@ -209,8 +216,67 @@ export function tokenSuccessBody(
     tokenType: typeof payload.token_type === 'string' ? payload.token_type : null,
   }
   if (opts.includeRefresh) {
-    body.refreshToken =
+    const raw =
       typeof payload.refresh_token === 'string' ? payload.refresh_token : null
+    if (raw && opts.sealSecret) {
+      body.refreshToken = sealRefreshToken(raw, opts.sealSecret)
+    } else {
+      body.refreshToken = raw
+    }
   }
   return body
+}
+
+function b64url(buf: Buffer): string {
+  return buf
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function fromB64url(value: string): Buffer | null {
+  try {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4))
+    return Buffer.from(padded + pad, 'base64')
+  } catch {
+    return null
+  }
+}
+
+/** Seal a Google refresh token so only this app's refresh route can unwrap it. */
+export function sealRefreshToken(raw: string, secret: string): string {
+  const payload = b64url(Buffer.from(raw, 'utf8'))
+  const mac = b64url(
+    createHmac('sha256', secret).update(`lumina_rt1|${raw}`).digest(),
+  )
+  return `${REFRESH_SEAL_PREFIX}${payload}.${mac}`
+}
+
+/**
+ * Unwrap a sealed refresh token. Returns null for raw Google tokens or
+ * tampered blobs — callers should treat that as reconnect_required.
+ */
+export function unsealRefreshToken(
+  sealed: string,
+  secret: string,
+): string | null {
+  if (!sealed.startsWith(REFRESH_SEAL_PREFIX) || !secret) return null
+  const rest = sealed.slice(REFRESH_SEAL_PREFIX.length)
+  const dot = rest.lastIndexOf('.')
+  if (dot <= 0) return null
+  const payload = rest.slice(0, dot)
+  const mac = rest.slice(dot + 1)
+  const rawBuf = fromB64url(payload)
+  const macBuf = fromB64url(mac)
+  if (!rawBuf || !macBuf) return null
+  const raw = rawBuf.toString('utf8')
+  if (!raw || raw.length > MAX_REFRESH_TOKEN_LEN) return null
+  const expected = createHmac('sha256', secret)
+    .update(`lumina_rt1|${raw}`)
+    .digest()
+  if (expected.length !== macBuf.length) return null
+  if (!timingSafeEqual(expected, macBuf)) return null
+  return raw
 }

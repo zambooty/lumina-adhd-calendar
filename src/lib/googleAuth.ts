@@ -13,36 +13,20 @@ const OAUTH_STATE_KEY = 'lumina_google_oauth_state_v1'
 const REDIRECT_URI_KEY = 'lumina_google_redirect_uri_v1'
 const AUTH_FLASH_KEY = 'lumina_google_auth_flash'
 
-/**
- * How long a refresh token may linger in localStorage after last write (web
- * mobile Safari bridge only). Prefer memory + sessionStorage; Cap native never
- * writes refresh/access to localStorage. Tradeoff: after this window the user
- * must Connect Google again.
- */
-export const REFRESH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000
-
 type StoredToken = {
   accessToken: string
   expiresAt: number
   scope?: string
   refreshToken?: string
-  /** Epoch ms when refreshToken was last written (localStorage retention). */
-  refreshStoredAt?: number
 }
 
 /** In-memory mirror — dies with the page; preferred over durable storage. */
 let memoryToken: StoredToken | null = null
 
 /**
- * Cap WebView keeps sessionStorage across Custom Tabs OAuth return, so a
- * durable localStorage refresh bridge is unnecessary (and riskier on backup /
- * rooted devices). Web mobile Safari still needs the short bridge.
+ * Never persist Google tokens in localStorage (XSS / shared-device risk).
+ * Cap + web both use memory + sessionStorage only. Clears any legacy bridge.
  */
-function allowLocalStorageRefreshBridge(): boolean {
-  return !isNativeCapacitor()
-}
-
-/** Drop any leftover localStorage token blob (Cap migrate / aged web bridge). */
 function clearLocalStorageTokenBridge(): void {
   try {
     localStorage.removeItem(TOKEN_KEY)
@@ -127,15 +111,6 @@ export function recommendedRedirectUris(origin = getOAuthRedirectUri()): string[
   return [base, `${base}/`]
 }
 
-function refreshStillValid(token: StoredToken, now = Date.now()): boolean {
-  if (!token.refreshToken) return false
-  const storedAt = token.refreshStoredAt ?? 0
-  // Legacy blobs without refreshStoredAt: treat as already aged out of
-  // localStorage retention (force re-connect) but still ok in session/memory.
-  if (!storedAt) return false
-  return now - storedAt < REFRESH_TOKEN_MAX_AGE_MS
-}
-
 function parseTokenRaw(raw: string | null): StoredToken | null {
   if (!raw) return null
   try {
@@ -149,22 +124,14 @@ function parseTokenRaw(raw: string | null): StoredToken | null {
 
 function readStored(): StoredToken | null {
   try {
-    // Prefer memory → sessionStorage → short-lived localStorage refresh bridge.
+    // Always scrub legacy localStorage bridge (Cap + web).
+    clearLocalStorageTokenBridge()
+
+    // Prefer memory → sessionStorage only (tab / Cap WebView lifetime).
     const candidates: StoredToken[] = []
     if (memoryToken) candidates.push(memoryToken)
     const session = parseTokenRaw(sessionStorage.getItem(TOKEN_KEY))
     if (session) candidates.push(session)
-
-    const useLocalBridge = allowLocalStorageRefreshBridge()
-    const local = useLocalBridge
-      ? parseTokenRaw(localStorage.getItem(TOKEN_KEY))
-      : null
-    if (!useLocalBridge) {
-      // Cap (or migrate): never keep Google tokens in durable localStorage.
-      clearLocalStorageTokenBridge()
-    } else if (local) {
-      candidates.push(local)
-    }
 
     let best: StoredToken | null = null
     for (const parsed of candidates) {
@@ -172,29 +139,18 @@ function readStored(): StoredToken | null {
         Boolean(parsed.accessToken) &&
         typeof parsed.expiresAt === 'number' &&
         Date.now() < parsed.expiresAt - 30_000
-      const hasRefresh =
-        Boolean(parsed.refreshToken) &&
-        (parsed === memoryToken ||
-          parsed === session ||
-          (parsed === local && refreshStillValid(parsed)))
+      const hasRefresh = Boolean(parsed.refreshToken)
       if (!hasAccess && !hasRefresh) continue
       best = {
         accessToken: hasAccess ? parsed.accessToken : '',
         expiresAt: hasAccess ? parsed.expiresAt : 0,
         scope: parsed.scope,
         refreshToken: hasRefresh ? parsed.refreshToken : undefined,
-        refreshStoredAt: hasRefresh ? parsed.refreshStoredAt : undefined,
       }
       if (hasAccess) break
     }
 
-    if (!best) {
-      // Drop aged / unused localStorage refresh so it cannot linger.
-      if (local && local.refreshToken && !refreshStillValid(local)) {
-        clearLocalStorageTokenBridge()
-      }
-      return null
-    }
+    if (!best) return null
 
     if (!best.accessToken && best.refreshToken) {
       writeStoredRaw(best)
@@ -206,45 +162,16 @@ function readStored(): StoredToken | null {
 }
 
 function writeStoredRaw(token: StoredToken): void {
-  const now = Date.now()
-  const withMeta: StoredToken = {
-    ...token,
-    refreshStoredAt: token.refreshToken
-      ? token.refreshStoredAt ?? now
-      : undefined,
-  }
-  memoryToken = withMeta
+  memoryToken = token
 
   // Session: full token for tab / Cap WebView lifetime (survives soft reloads).
-  // Never log this blob — it contains bearer material.
+  // Never log this blob — it contains bearer material. Never use localStorage.
   try {
-    sessionStorage.setItem(TOKEN_KEY, JSON.stringify(withMeta))
+    sessionStorage.setItem(TOKEN_KEY, JSON.stringify(token))
   } catch {
     /* private mode */
   }
-
-  // localStorage: web-only refresh bridge (never access token). Cap skips this.
-  // Cap retention via refreshStoredAt so a stolen blob ages out.
-  if (!allowLocalStorageRefreshBridge()) {
-    clearLocalStorageTokenBridge()
-    return
-  }
-  try {
-    if (withMeta.refreshToken) {
-      const bridge: StoredToken = {
-        accessToken: '',
-        expiresAt: 0,
-        scope: withMeta.scope,
-        refreshToken: withMeta.refreshToken,
-        refreshStoredAt: withMeta.refreshStoredAt,
-      }
-      localStorage.setItem(TOKEN_KEY, JSON.stringify(bridge))
-    } else {
-      clearLocalStorageTokenBridge()
-    }
-  } catch {
-    /* quota / private mode */
-  }
+  clearLocalStorageTokenBridge()
 }
 
 function writeStored(token: StoredToken): void {
@@ -253,11 +180,6 @@ function writeStored(token: StoredToken): void {
   writeStoredRaw({
     ...token,
     refreshToken,
-    refreshStoredAt: token.refreshToken
-      ? Date.now()
-      : refreshToken
-        ? prev?.refreshStoredAt ?? Date.now()
-        : undefined,
     scope: token.scope ?? prev?.scope,
   })
 }
