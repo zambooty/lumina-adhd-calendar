@@ -7,8 +7,14 @@
  * Android: skip Browser.close() — deep-linking into singleTask MainActivity
  * already clears the Custom Tab; close() can re-open the auth URL / hang
  * the next Browser.open (capacitor-plugins#2610).
+ *
+ * Security: only accept OAuth returns on trusted Cap / published schemes +
+ * hosts. Arbitrary appUrlOpen URLs with ?code= must not drive navigation.
  */
+import { isTrustedOAuthReturnUrl } from './oauthReturnUrl'
 import { isAndroidNative, isNativeCapacitor } from './platform'
+
+export { isTrustedOAuthReturnUrl }
 
 let listening = false
 
@@ -28,6 +34,8 @@ export async function installCapOAuthReturnListener(): Promise<void> {
       } catch {
         return
       }
+      if (!isTrustedOAuthReturnUrl(parsed)) return
+
       const hasCode = parsed.searchParams.has('code')
       const hasError = parsed.searchParams.has('error')
       if (!hasCode && !hasError) return
@@ -42,7 +50,9 @@ export async function installCapOAuthReturnListener(): Promise<void> {
 
       // Reload into the Cap WebView with OAuth query so hydrate can run.
       // sessionStorage OAuth state survives same-origin assign (soft-security Cap).
-      const next = `${parsed.pathname}${parsed.search}${parsed.hash}` || `/${parsed.search}`
+      // Only path + query + hash — never re-introduce a foreign origin/scheme.
+      const path = parsed.pathname && parsed.pathname !== '' ? parsed.pathname : '/'
+      const next = `${path}${parsed.search}${parsed.hash}`
       if (window.location.search !== parsed.search) {
         window.location.assign(next.startsWith('/') ? next : `/${next}`)
       }

@@ -8,10 +8,18 @@
 export const ANDROID_UPDATE_OWNER = 'zambooty'
 export const ANDROID_UPDATE_REPO = 'lumina-adhd-calendar'
 export const ANDROID_TAG_PREFIXES = ['android-debug-', 'android-release-'] as const
+/**
+ * Strict release tag shape — date + version segment.
+ * Rejects open-ended prefix matches that would fan out GitHub tag lookups.
+ */
+export const ANDROID_TAG_RE =
+  /^android-(debug|release)-\d{4}-\d{2}-\d{2}-[\w.-]+$/
 /** Match Cap AppUpdatePlugin MAX_APK_BYTES — hard stop for proxy streams. */
 export const MAX_APK_PROXY_BYTES = 80 * 1024 * 1024
 /** Cache GitHub Releases lookups so /api/android/update is not a hot GitHub fan-out. */
 const GITHUB_RELEASE_CACHE_MS = 5 * 60_000
+/** Known-good APK tags (manifest + latest release list) — stream path only. */
+const knownApkTags = new Set<string>()
 
 export type AndroidLatestManifest = {
   versionCode: number
@@ -60,7 +68,17 @@ function githubHeaders(accept = 'application/vnd.github+json'): Record<string, s
 }
 
 export function isAndroidReleaseTag(tag: string): boolean {
-  return ANDROID_TAG_PREFIXES.some((p) => tag.startsWith(p))
+  return ANDROID_TAG_RE.test(tag.trim())
+}
+
+/** Remember a tag we already resolved via update/manifest (stream allowlist). */
+export function rememberKnownApkTag(tag: string): void {
+  const t = tag.trim()
+  if (isAndroidReleaseTag(t)) knownApkTags.add(t)
+}
+
+export function isKnownApkTag(tag: string): boolean {
+  return knownApkTags.has(tag.trim())
 }
 
 /** Pull versionCode from release body / name when present. */
@@ -155,6 +173,7 @@ let latestReleaseCache: LatestReleaseCache | null = null
 export function clearAndroidUpdateCache(): void {
   latestReleaseCache = null
   releaseTagCache.clear()
+  knownApkTags.clear()
 }
 
 const releaseTagCache = new Map<
@@ -314,6 +333,7 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
   }
   latestReleaseCache = { at: now, value }
   releaseTagCache.set(match.tag_name, { at: now, release: match })
+  rememberKnownApkTag(match.tag_name)
   return value
 }
 
@@ -327,6 +347,8 @@ export function resolveFromManifest(
     tag: manifest.tag,
     asset: manifest.apkAsset,
   })
+
+  rememberKnownApkTag(manifest.tag)
 
   return {
     ok: true,
@@ -353,10 +375,17 @@ export function resolveFromManifest(
   }
 }
 
+const ALLOWED_APK_ASSETS = new Set([
+  'lumina-debug.apk',
+  'lumina-release.apk',
+  'lumina.apk',
+])
+
 /**
  * Resolve a release asset for download.
- * Prefer a public redirect URL (no egress through this host). Streaming is a
- * private-asset / last-resort fallback only.
+ * Default: 302 to the public GitHub download URL (no GitHub API fan-out).
+ * Streaming is last-resort and only for tags already seen via /update or the
+ * static manifest — never for attacker-chosen tag prefixes.
  */
 export async function fetchGithubReleaseAsset(opts: {
   tag: string
@@ -395,15 +424,40 @@ export async function fetchGithubReleaseAsset(opts: {
       ok: false,
       status: 400,
       error: 'bad_tag',
-      hint: 'Only android-debug-* / android-release-* tags are allowed.',
+      hint:
+        'Only android-debug-YYYY-MM-DD-* / android-release-YYYY-MM-DD-* tags are allowed.',
     }
   }
-  if (!asset.toLowerCase().endsWith('.apk')) {
+  if (
+    !asset.toLowerCase().endsWith('.apk') ||
+    !ALLOWED_APK_ASSETS.has(asset)
+  ) {
     return {
       ok: false,
       status: 400,
       error: 'bad_asset',
-      hint: 'Only .apk assets are allowed.',
+      hint: 'Only known lumina*.apk asset names are allowed.',
+    }
+  }
+
+  // Public redirect — construct URL, no releases/tags API call.
+  if (opts.preferRedirect !== false) {
+    return {
+      ok: true,
+      mode: 'redirect',
+      url: publicDownloadUrl(tag, asset),
+      filename: asset,
+    }
+  }
+
+  // Stream path: only tags already resolved via update/manifest (no fan-out).
+  if (!isKnownApkTag(tag) && !releaseTagCache.has(tag)) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'tag_not_known',
+      hint:
+        'APK stream only allowed for tags already published via /api/android/update.',
     }
   }
 
@@ -427,16 +481,6 @@ export async function fetchGithubReleaseAsset(opts: {
       status: 413,
       error: 'apk_too_large',
       hint: 'APK exceeds the proxy size limit.',
-    }
-  }
-
-  // Prefer public redirect — client downloads from GitHub, not through us.
-  if (opts.preferRedirect !== false && withId.browser_download_url) {
-    return {
-      ok: true,
-      mode: 'redirect',
-      url: withId.browser_download_url,
-      filename: withId.name,
     }
   }
 

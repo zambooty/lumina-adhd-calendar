@@ -67,21 +67,55 @@ export function refreshRateLimit(clientKey: string): RateLimitResult {
 }
 
 /**
+ * Headers that may identify the client IP — only consulted when the deployment
+ * explicitly opts in via TRUST_PLATFORM_IP_HEADERS (comma-separated names).
+ * Without that env, clients can spoof these on edges that do not strip them.
+ */
+const PLATFORM_IP_HEADER_CANDIDATES = [
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip',
+] as const
+
+/**
+ * Names the platform is known to set (lower-case). Empty = trust none of the
+ * single-IP platform headers; fall back to last X-Forwarded-For hop only.
+ *
+ * Example: TRUST_PLATFORM_IP_HEADERS=x-real-ip,cf-connecting-ip
+ */
+function trustedPlatformIpHeaderNames(): Set<string> {
+  const raw = (process.env.TRUST_PLATFORM_IP_HEADERS ?? '').trim()
+  if (!raw) return new Set()
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  )
+}
+
+function platformClientIp(request: Request): string {
+  const trusted = trustedPlatformIpHeaderNames()
+  if (trusted.size === 0) return ''
+  for (const name of PLATFORM_IP_HEADER_CANDIDATES) {
+    if (!trusted.has(name)) continue
+    const value = request.headers.get(name)?.trim()
+    if (value) return value.slice(0, 128)
+  }
+  return ''
+}
+
+/**
  * Rate-limit client key that resists header spoofing as much as a single
  * process can without a trusted-proxy hop count.
  *
- * Prefer platform-set client IP headers (X-Real-IP / CF-Connecting-IP /
- * True-Client-IP). Visitors can prepend XFF hops; when those are all we have,
- * take the *last* hop (edge-appended). Do **not** mix Origin into the key —
+ * Only trust named platform IP headers when TRUST_PLATFORM_IP_HEADERS lists
+ * them (edge must strip client copies). Otherwise use the *last*
+ * X-Forwarded-For hop (edge-appended). Do **not** mix Origin into the key —
  * callers control Origin and could mint a fresh bucket per value.
  */
 export function clientKeyFromRequest(request: Request): string {
-  const platformIp =
-    request.headers.get('x-real-ip')?.trim() ||
-    request.headers.get('cf-connecting-ip')?.trim() ||
-    request.headers.get('true-client-ip')?.trim() ||
-    ''
-  let ip = platformIp.length > 0 ? platformIp.slice(0, 128) : ''
+  let ip = platformClientIp(request)
   if (!ip) {
     const xf = request.headers.get('x-forwarded-for')
     if (xf) {
