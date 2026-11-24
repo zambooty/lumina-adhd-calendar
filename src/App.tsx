@@ -321,7 +321,11 @@ export default function App() {
               aria-label="Open menu"
               aria-expanded={menuOpen}
               aria-haspopup="dialog"
-              onClick={openMenu}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                openMenu()
+              }}
             >
               <span className="menu-trigger-icon" aria-hidden>
                 <span />
