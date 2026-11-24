@@ -1,23 +1,5 @@
 apply plugin: 'com.android.application'
 
-// Optional Cap debug signing — credentials live only in gitignored
-// android/local.properties (never commit passwords or the keystore file).
-def luminaLocalProps = new Properties()
-def luminaLocalFile = rootProject.file('local.properties')
-if (luminaLocalFile.exists()) {
-    luminaLocalFile.withInputStream { luminaLocalProps.load(it) }
-}
-def luminaDebugStoreRel = luminaLocalProps.getProperty('lumina.debug.storeFile', 'keystore/lumina-debug.keystore')
-def luminaDebugStoreFile = rootProject.file(luminaDebugStoreRel)
-def luminaDebugStorePassword = luminaLocalProps.getProperty('lumina.debug.storePassword', '')
-def luminaDebugKeyAlias = luminaLocalProps.getProperty('lumina.debug.keyAlias', '')
-def luminaDebugKeyPassword = luminaLocalProps.getProperty('lumina.debug.keyPassword', '')
-def luminaHasDebugSigning =
-    luminaDebugStoreFile.isFile() &&
-    luminaDebugStorePassword &&
-    luminaDebugKeyAlias &&
-    luminaDebugKeyPassword
-
 android {
     namespace = "com.makesoft.lumina"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -35,22 +17,11 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    if (luminaHasDebugSigning) {
-        signingConfigs {
-            debug {
-                storeFile luminaDebugStoreFile
-                storePassword luminaDebugStorePassword
-                keyAlias luminaDebugKeyAlias
-                keyPassword luminaDebugKeyPassword
-            }
-        }
-    }
+    // Debug builds use the Android SDK default debug keystore (~/.android/debug.keystore).
+    // Do not commit a custom keystore or plaintext passwords — that ships in the web package.
+    // Optional shared Cap signing for in-place updates: keep a keystore only on the build
+    // machine (never in git) and wire it via a local, gitignored Gradle init script if needed.
     buildTypes {
-        debug {
-            if (luminaHasDebugSigning) {
-                signingConfig signingConfigs.debug
-            }
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

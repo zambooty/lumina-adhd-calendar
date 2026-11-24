@@ -1,21 +1,12 @@
-# LUMINA debug keystore (local only)
+# Android signing material — do not commit
 
-The Cap debug signing keystore is **not** shipped in the web app package and
-**must not** be committed.
+This directory must stay empty of keystore files in git and in the Cursor web
+publish package.
 
-Android only allows in-place upgrades when the new APK uses the same signing
-certificate as the installed app. Place the shared debug keystore on the build
-machine (not in git), then point Gradle at it via `android/local.properties`
-(also gitignored):
+**Default:** `npm run android:debug` uses the Android SDK debug keystore
+(`~/.android/debug.keystore`). No passwords belong in the repo.
 
-```
-lumina.debug.storeFile=keystore/lumina-debug.keystore
-lumina.debug.storePassword=…
-lumina.debug.keyAlias=…
-lumina.debug.keyPassword=…
-```
-
-Restore helpers: `npm run android:ensure-debug-keystore` (copies from the
-project media signing folder when available on agent machines).
-
-Release / Play signing stays elsewhere — never put release secrets in the repo.
+**Optional shared Cap keystore** (in-place sideload updates across machines):
+generate a keystore on your machine only, never commit it, and never put
+passwords in tracked Gradle files. If install says “package conflicts,”
+uninstall once, then install the new APK.
