@@ -190,3 +190,15 @@ export function buildDayTintMap(
   }
   return out
 }
+
+/** Journal optional feeling prompts. */
+export const FEELING_PROMPTS = [
+  'What feeling is loudest right now?',
+  'If your body could talk, what would it say?',
+  'Name one feeling without fixing it.',
+  'What emotion showed up while you worked today?',
+]
+
+export function pickFeelingPrompt(seed = Date.now()): string {
+  return FEELING_PROMPTS[seed % FEELING_PROMPTS.length]!
+}

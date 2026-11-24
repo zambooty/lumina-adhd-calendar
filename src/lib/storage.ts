@@ -44,6 +44,8 @@ function normalizeState(raw: AppState): AppState {
     taskGroups: ensureTaskGroups(raw.taskGroups),
     todoTemplates: Array.isArray(raw.todoTemplates) ? raw.todoTemplates : [],
     dailyTodos: Array.isArray(raw.dailyTodos) ? raw.dailyTodos : [],
+    goals: Array.isArray(raw.goals) ? raw.goals : [],
+    journalEntries: Array.isArray(raw.journalEntries) ? raw.journalEntries : [],
     moodCheckIns: Array.isArray(raw.moodCheckIns) ? raw.moodCheckIns : [],
   }
 }

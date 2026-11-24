@@ -12,8 +12,12 @@ import { DailyTodoList } from './components/DailyTodoList'
 import { TaskGroupsPanel } from './components/TaskGroupsPanel'
 import { AgendaView } from './components/AgendaView'
 import { FeelingCheckIn } from './components/FeelingCheckIn'
+import { GoalsPanel } from './components/GoalsPanel'
+import { JournalPanel } from './components/JournalPanel'
+import { HabitsReportsPanel } from './components/HabitsReportsPanel'
 import { PullDecisionSheet } from './components/PullDecisionSheet'
 import { checkInsForDay, checkInDayKey } from './lib/feelings'
+import { goalsNeedingPrompt } from './lib/goals'
 import { LeaveNowMoment } from './components/LeaveNowMoment'
 import { UpdateAvailableSheet } from './components/UpdateAvailableSheet'
 import { useAppState } from './hooks/useAppState'
@@ -64,11 +68,23 @@ export default function App() {
     pullGroupItemToDaily,
     pullGroupItemToCalendar,
     addMoodCheckIn,
+    addGoal,
+    archiveGoal,
+    addJournalEntry,
+    removeJournalEntry,
+    toggleEventComplete,
   } = useAppState()
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFocusSection, setMenuFocusSection] = useState<
-    'todos' | 'groups' | 'agenda' | 'feelings' | null
+    | 'todos'
+    | 'groups'
+    | 'agenda'
+    | 'goals'
+    | 'journal'
+    | 'habits'
+    | 'feelings'
+    | null
   >(null)
   const [uiFocusEventId, setUiFocusEventId] = useState<string | null>(null)
   const [pullSheetOpen, setPullSheetOpen] = useState(false)
@@ -242,6 +258,10 @@ export default function App() {
     () => checkInsForDay(state.moodCheckIns ?? [], checkInDayKey()).length,
     [state.moodCheckIns],
   )
+  const goalNudgeCount = useMemo(
+    () => goalsNeedingPrompt(state.goals ?? []).length,
+    [state.goals],
+  )
 
   const menuSections = useMemo(
     () => [
@@ -318,6 +338,57 @@ export default function App() {
             onToggle={toggleDailyTodo}
             onRemove={removeDailyTodo}
             onSetRepeat={setTodoRepeat}
+            onToggleEventComplete={toggleEventComplete}
+          />
+        ),
+      },
+      {
+        id: 'goals' as const,
+        title: 'Goals',
+        hint: 'Weekly · monthly · yearly · task groups count',
+        accent: 'amber' as const,
+        badge:
+          goalNudgeCount > 0 ? (
+            <span className="section-badge">{goalNudgeCount} open</span>
+          ) : undefined,
+        children: (
+          <GoalsPanel
+            goals={state.goals ?? []}
+            groups={state.taskGroups ?? []}
+            todos={state.dailyTodos ?? []}
+            events={state.events}
+            onAdd={addGoal}
+            onArchive={archiveGoal}
+          />
+        ),
+      },
+      {
+        id: 'journal' as const,
+        title: 'Journal',
+        hint: 'Goal prompts · keywords · feelings',
+        accent: 'coral' as const,
+        children: (
+          <JournalPanel
+            entries={state.journalEntries ?? []}
+            goals={state.goals ?? []}
+            onAdd={addJournalEntry}
+            onRemove={removeJournalEntry}
+          />
+        ),
+      },
+      {
+        id: 'habits' as const,
+        title: 'Habits & reports',
+        hint: 'Completions · moods · energy · keywords',
+        accent: 'cyan' as const,
+        children: (
+          <HabitsReportsPanel
+            todos={state.dailyTodos ?? []}
+            events={state.events}
+            groups={state.taskGroups ?? []}
+            goals={state.goals ?? []}
+            journal={state.journalEntries ?? []}
+            checkIns={state.moodCheckIns ?? []}
           />
         ),
       },
@@ -370,6 +441,7 @@ export default function App() {
       inboxCount,
       todayTodoCount,
       todayMoodCount,
+      goalNudgeCount,
       pendingCandidates,
       pulling,
       state.autoAddHighConfidence,
@@ -379,6 +451,8 @@ export default function App() {
       state.dailyTodos,
       state.taskGroups,
       state.events,
+      state.goals,
+      state.journalEntries,
       state.moodCheckIns,
       pullStatus,
       pullSources,
@@ -398,6 +472,11 @@ export default function App() {
       pullGroupItemToDaily,
       pullGroupItemToCalendar,
       addMoodCheckIn,
+      toggleEventComplete,
+      addGoal,
+      archiveGoal,
+      addJournalEntry,
+      removeJournalEntry,
     ],
   )
 

@@ -39,6 +39,8 @@ export type CalendarEvent = {
   /** Per-event override; if set, used instead of stack template */
   reminderOverride?: ReminderOffset[]
   createdAt: string
+  /** When the user marked this event/reminder complete. */
+  completedAt?: string
 }
 
 export type CandidateStatus = 'pending' | 'scheduled' | 'dismissed'
@@ -145,6 +147,41 @@ export type MoodCheckIn = {
   createdAt: string
 }
 
+/** Weekly / monthly / yearly reflection goals. */
+export type GoalPeriod = 'weekly' | 'monthly' | 'yearly'
+
+export type Goal = {
+  id: string
+  period: GoalPeriod
+  title: string
+  /** Optional task-group link — category completions count toward this goal. */
+  taskGroupId?: string
+  /** Period anchor day key (week Mon / month 1st / Jan 1) as yyyy-MM-dd. */
+  periodKey: string
+  /** Optional completion target (todos/events in linked group). */
+  targetCount?: number
+  /** Prompt shown in journal / goals UI. */
+  prompt: string
+  createdAt: string
+  archived?: boolean
+}
+
+export type JournalEntry = {
+  id: string
+  /** Local day key yyyy-MM-dd */
+  date: string
+  body: string
+  goalId?: string
+  /** Snapshot of the prompt answered (goal or feeling). */
+  prompt?: string
+  feelingCategory?: string
+  feeling?: string
+  keywords: string[]
+  /** 1–5 energy when logged with the entry. */
+  energy?: number
+  createdAt: string
+}
+
 export type AppState = {
   events: CalendarEvent[]
   candidates: EventCandidate[]
@@ -165,7 +202,11 @@ export type AppState = {
   todoTemplates: TodoTemplate[]
   /** Per-day todo instances (including one-offs). */
   dailyTodos: DailyTodo[]
-  /** Feeling + energy check-ins (tint calendar days). */
+  /** W/M/Y goals (task groups may count as goals). */
+  goals: Goal[]
+  /** Freeform journal entries with optional goal / feeling prompts. */
+  journalEntries: JournalEntry[]
+  /** Feeling + energy check-ins (tint calendar days + reports). */
   moodCheckIns: MoodCheckIn[]
 }
 
