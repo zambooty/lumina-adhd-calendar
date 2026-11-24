@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Hero } from './components/Hero'
+import { OnboardingSignIn } from './components/OnboardingSignIn'
 import { CompanionPet } from './components/CompanionPet'
 import { MixHome } from './components/MixHome'
 import { SourceInbox } from './components/SourceInbox'
@@ -371,7 +371,16 @@ export default function App() {
   )
 
   if (!state.hasSeenHero) {
-    return <Hero onEnter={dismissHero} />
+    return (
+      <OnboardingSignIn
+        onEnter={dismissHero}
+        onPullAndEnter={async () => {
+          setPullSheetOpen(true)
+          dismissHero()
+          await pullSources()
+        }}
+      />
+    )
   }
 
   return (
@@ -449,6 +458,7 @@ export default function App() {
           onRemoveDailyTodo={removeDailyTodo}
           onSetTodoRepeat={setTodoRepeat}
           onOpenAgenda={openAgendaMenu}
+          onPull={() => void handleTopPull()}
         />
       </main>
 

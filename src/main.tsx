@@ -17,7 +17,7 @@ async function boot() {
   // Finish mobile OAuth redirect before first paint of the main shell.
   try {
     const result = await hydrateGoogleAuthFromRedirect()
-    // Avoid dumping users back on the hero after a successful Google redirect.
+    // Skip first-run sign-in after a successful Google redirect (Cap Custom Tabs).
     if (result.ok || isGoogleConnected()) {
       const state = loadState()
       if (!state.hasSeenHero) {
