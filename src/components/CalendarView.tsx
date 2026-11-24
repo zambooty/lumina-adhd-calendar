@@ -11,11 +11,13 @@ import {
   addWeeks,
   addYears,
   format,
+  isSameDay,
   isSameMonth,
   isToday,
   isTomorrow,
   setHours,
   setMinutes,
+  startOfDay,
   startOfWeek,
 } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -180,7 +182,7 @@ export function CalendarView({
   }, [focusEventId, events, onFocusConsumed])
 
   function openDay(day: Date) {
-    setSheet({ kind: 'day', day })
+    setSheet({ kind: 'day', day: startOfDay(day) })
   }
 
   function openEvent(eventId: string) {
@@ -188,7 +190,7 @@ export function CalendarView({
   }
 
   function openAdd(day: Date, entryKind?: ManualEntryKind) {
-    setSheet({ kind: 'add', day, entryKind })
+    setSheet({ kind: 'add', day: startOfDay(day), entryKind })
   }
 
   function closeSheet() {
@@ -223,6 +225,9 @@ export function CalendarView({
               type="button"
               role="tab"
               aria-selected={mode === v.id}
+              aria-controls={`cal-panel-${v.id}`}
+              id={`cal-tab-${v.id}`}
+              tabIndex={mode === v.id ? 0 : -1}
               className={`cal-tab${mode === v.id ? ' is-active' : ''}`}
               onClick={() => setMode(v.id)}
             >
@@ -288,11 +293,18 @@ export function CalendarView({
         </div>
       </div>
 
-      <div className="cal-body" role="tabpanel">
+      <div
+        className="cal-body"
+        role="tabpanel"
+        id={`cal-panel-${mode}`}
+        aria-labelledby={`cal-tab-${mode}`}
+        key={mode}
+      >
         {mode === 'month' ? (
           <MonthGrid
             cursor={cursor}
             events={visibleEvents}
+            selectedDay={sheet?.kind === 'day' || sheet?.kind === 'add' ? sheet.day : null}
             onOpenDay={openDay}
             onOpenEvent={openEvent}
           />
@@ -330,18 +342,18 @@ export function CalendarView({
             onOpenAdd={openAdd}
             onBackToDay={() => {
               if (sheet.kind === 'add') {
-                setSheet({ kind: 'day', day: sheet.day })
+                setSheet({ kind: 'day', day: startOfDay(sheet.day) })
                 return
               }
               if (selectedEvent) {
                 const d = safeParseIso(selectedEvent.start)
-                if (d) setSheet({ kind: 'day', day: d })
+                if (d) setSheet({ kind: 'day', day: startOfDay(d) })
                 else closeSheet()
               }
             }}
             onSelectEntryKind={(kind) => {
               if (sheet.kind === 'add' || sheet.kind === 'day') {
-                const day = sheet.day
+                const day = startOfDay(sheet.day)
                 setSheet({ kind: 'add', day, entryKind: kind })
               }
             }}
@@ -359,11 +371,13 @@ export function CalendarView({
 function MonthGrid({
   cursor,
   events,
+  selectedDay,
   onOpenDay,
   onOpenEvent,
 }: {
   cursor: Date
   events: CalendarEvent[]
+  selectedDay: Date | null
   onOpenDay: (day: Date) => void
   onOpenEvent: (id: string) => void
 }) {
@@ -384,23 +398,27 @@ function MonthGrid({
       </div>
       <div className="month-cells">
         {days.map((day) => {
-          const dayEvts = eventsOnDay(events, day)
-          const outside = isOutsideMonth(day, cursor)
-          const today = isToday(day)
+          const dayKey = startOfDay(day)
+          const dayEvts = eventsOnDay(events, dayKey)
+          const outside = isOutsideMonth(dayKey, cursor)
+          const today = isToday(dayKey)
+          const selected = selectedDay != null && isSameDay(dayKey, selectedDay)
           const shown = dayEvts.slice(0, 3)
           const extra = dayEvts.length - shown.length
           return (
             <div
-              key={day.toISOString()}
-              className={`month-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${dayEvts.length ? ' has-events' : ''}`}
+              key={dayKey.toISOString()}
+              className={`month-cell${outside ? ' is-outside' : ''}${today ? ' is-today' : ''}${selected ? ' is-selected' : ''}${dayEvts.length ? ' has-events' : ''}`}
+              data-date={format(dayKey, 'yyyy-MM-dd')}
             >
               <button
                 type="button"
                 className="month-cell-hit"
-                onClick={() => onOpenDay(day)}
-                aria-label={`${format(day, 'EEEE, MMM d')}${dayEvts.length ? `, ${dayEvts.length} events` : ''}`}
+                onClick={() => onOpenDay(dayKey)}
+                aria-label={`${format(dayKey, 'EEEE, MMM d')}${dayEvts.length ? `, ${dayEvts.length} events` : ''}`}
+                aria-pressed={selected}
               >
-                <span className="month-daynum">{format(day, 'd')}</span>
+                <span className="month-daynum">{format(dayKey, 'd')}</span>
               </button>
               <div className="month-dots">
                 {shown.map((e) => {
@@ -415,7 +433,10 @@ function MonthGrid({
                         borderColor: `${color}88`,
                         color,
                       }}
-                      onClick={() => onOpenEvent(e.id)}
+                      onClick={(ev) => {
+                        ev.stopPropagation()
+                        onOpenEvent(e.id)
+                      }}
                     >
                       {e.title}
                     </button>
@@ -425,7 +446,10 @@ function MonthGrid({
                   <button
                     type="button"
                     className="month-more"
-                    onClick={() => onOpenDay(day)}
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      onOpenDay(dayKey)
+                    }}
                   >
                     +{extra} more
                   </button>
