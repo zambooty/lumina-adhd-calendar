@@ -4,7 +4,6 @@ import { useEffect, useId, useState } from 'react'
 
 export type MenuSectionId =
   | 'inbox'
-  | 'upcoming'
   | 'google'
   | 'reminders'
   | 'blink'
@@ -28,12 +27,18 @@ type Props = {
 
 export function AppMenu({ open, onClose, sections, footer }: Props) {
   const titleId = useId()
-  const [active, setActive] = useState<MenuSectionId>('inbox')
+  const [active, setActive] = useState<MenuSectionId | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setActive(null)
+      return
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (active) setActive(null)
+        else onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
@@ -42,15 +47,17 @@ export function AppMenu({ open, onClose, sections, footer }: Props) {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
-  }, [open, onClose])
+  }, [open, onClose, active])
 
   useEffect(() => {
-    if (open && sections.length && !sections.some((s) => s.id === active)) {
-      setActive(sections[0].id)
+    if (open && active && !sections.some((s) => s.id === active)) {
+      setActive(null)
     }
   }, [open, sections, active])
 
-  const current = sections.find((s) => s.id === active) ?? sections[0]
+  const current = active
+    ? (sections.find((s) => s.id === active) ?? null)
+    : null
 
   return (
     <AnimatePresence>
@@ -69,57 +76,60 @@ export function AppMenu({ open, onClose, sections, footer }: Props) {
             onClick={onClose}
           />
           <motion.aside
-            className="app-menu-drawer"
+            className="app-menu-screen"
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            initial={{ x: '105%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '105%' }}
+            initial={{ y: '8%', opacity: 0.85 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '6%', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 34 }}
           >
-            <header className="app-menu-header">
-              <div>
-                <p id={titleId} className="app-menu-title">
-                  Menu
-                </p>
-                <p className="app-menu-sub">Inbox · Upcoming · Connect · Stacks</p>
-              </div>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={onClose}
-              >
-                Close
-              </button>
-            </header>
+            <span id={titleId} className="sr-only">
+              Menu
+            </span>
 
-            <nav className="app-menu-nav" aria-label="App sections">
-              {sections.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`app-menu-nav-btn app-menu-nav-btn--${s.accent}${active === s.id ? ' is-active' : ''}`}
-                  aria-current={active === s.id ? 'page' : undefined}
-                  onClick={() => setActive(s.id)}
-                >
-                  <span className="app-menu-nav-label">{s.title}</span>
-                  {s.badge}
-                </button>
-              ))}
-            </nav>
+            <button
+              type="button"
+              className="app-menu-dismiss"
+              aria-label={current ? 'Back to menu' : 'Close menu'}
+              onClick={() => {
+                if (current) setActive(null)
+                else onClose()
+              }}
+            >
+              {current ? '←' : '✕'}
+            </button>
 
-            {current && (
-              <div className="app-menu-panel">
-                <div className="app-menu-panel-head">
-                  <h2 className="panel-title">{current.title}</h2>
-                  <p className="panel-hint">{current.hint}</p>
+            <div className="app-menu-scroll">
+              {!current ? (
+                <nav className="app-menu-list" aria-label="App sections">
+                  {sections.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`app-menu-list-item app-menu-list-item--${s.accent}`}
+                      onClick={() => setActive(s.id)}
+                    >
+                      <span className="app-menu-list-copy">
+                        <span className="app-menu-list-title">{s.title}</span>
+                        <span className="app-menu-list-hint">{s.hint}</span>
+                      </span>
+                      {s.badge}
+                    </button>
+                  ))}
+                  {footer && (
+                    <div className="app-menu-list-footer">{footer}</div>
+                  )}
+                </nav>
+              ) : (
+                <div className="app-menu-section">
+                  <h2 className="app-menu-section-title">{current.title}</h2>
+                  <p className="app-menu-section-hint">{current.hint}</p>
+                  <div className="app-menu-section-body">{current.children}</div>
                 </div>
-                <div className="app-menu-panel-body">{current.children}</div>
-              </div>
-            )}
-
-            {footer && <footer className="app-menu-footer">{footer}</footer>}
+              )}
+            </div>
           </motion.aside>
         </motion.div>
       )}
