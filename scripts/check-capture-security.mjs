@@ -8,12 +8,16 @@ import {
   consumeCaptureToken,
   isTranscribeCallerAllowed,
   mintCaptureToken,
+  readRequestTextCapped,
   readTranscribeAllowlist,
   resetCaptureTokens,
+  twilioSmsMaxBytes,
+  twilioSmsRateLimit,
   verifyTwilioSignature,
   twilioWebhookUrl,
   whisperSpendEnabled,
   DEFAULT_TRANSCRIBE_MAX_BYTES,
+  DEFAULT_TWILIO_SMS_MAX_BYTES,
 } from '../server/captureSecurity.ts'
 import { readGoogleAccessToken } from '../server/googleAccessAuth.ts'
 import { isAllowedAppOrigin, PUBLISHED_APP_ORIGIN } from '../server/originAllowlist.ts'
@@ -123,6 +127,52 @@ assert.equal(
 )
 
 assert.ok(DEFAULT_TRANSCRIBE_MAX_BYTES >= 1_000_000)
+assert.ok(DEFAULT_TWILIO_SMS_MAX_BYTES >= 1024)
+assert.equal(twilioSmsMaxBytes(), DEFAULT_TWILIO_SMS_MAX_BYTES)
+
+// Twilio SMS body cap + rate limit
+{
+  const tooBigHeader = new Request('https://example.test/api/capture/twilio-sms', {
+    method: 'POST',
+    headers: { 'content-length': String(DEFAULT_TWILIO_SMS_MAX_BYTES + 1) },
+    body: 'x'.repeat(32),
+  })
+  const rejected = await readRequestTextCapped(
+    tooBigHeader,
+    DEFAULT_TWILIO_SMS_MAX_BYTES,
+  )
+  assert.equal(rejected.ok, false)
+
+  const okBody = new Request('https://example.test/api/capture/twilio-sms', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'Body=hi&From=%2B15551234567',
+  })
+  const accepted = await readRequestTextCapped(okBody, DEFAULT_TWILIO_SMS_MAX_BYTES)
+  assert.equal(accepted.ok, true)
+  if (accepted.ok) assert.match(accepted.text, /Body=hi/)
+
+  const streamOver = new Request('https://example.test/api/capture/twilio-sms', {
+    method: 'POST',
+    body: 'y'.repeat(DEFAULT_TWILIO_SMS_MAX_BYTES + 64),
+  })
+  const streamed = await readRequestTextCapped(
+    streamOver,
+    DEFAULT_TWILIO_SMS_MAX_BYTES,
+  )
+  assert.equal(streamed.ok, false)
+
+  resetRateLimits()
+  let denied = false
+  for (let i = 0; i < 40; i++) {
+    const result = twilioSmsRateLimit('test-twilio-ip')
+    if (!result.allowed) {
+      denied = true
+      break
+    }
+  }
+  assert.equal(denied, true, 'twilioSmsRateLimit should trip within 40 hits')
+}
 
 // Whisper spend fail-closed without allowlist
 {

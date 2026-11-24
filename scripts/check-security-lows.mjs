@@ -1,16 +1,21 @@
 /**
  * Checks for remaining low-severity hardenings:
- * - Cap OAuth return URL scheme/host allowlist
+ * - Cap OAuth return URL scheme/host allowlist + safe assign href
  * - Android APK tag shape + redirect-without-API
  */
 import assert from 'node:assert/strict'
-import { isTrustedOAuthReturnUrl } from '../src/lib/oauthReturnUrl.ts'
+import {
+  isTrustedOAuthReturnUrl,
+  safeOAuthReturnAssignHref,
+} from '../src/lib/oauthReturnUrl.ts'
 import {
   clearAndroidUpdateCache,
   fetchGithubReleaseAsset,
   isAndroidReleaseTag,
   rememberKnownApkTag,
 } from '../server/androidUpdate.ts'
+
+const BASE = 'https://localhost'
 
 // OAuth return scheme / host
 {
@@ -49,6 +54,63 @@ import {
       new URL('https://user:pass@localhost/?code=abc'),
     ),
     false,
+  )
+}
+
+// Cap OAuth assign href — same-origin path + allowlisted query only
+{
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost/?code=abc&state=xyz'),
+      BASE,
+    ),
+    '/?code=abc&state=xyz',
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost/?code=abc&evil=https://phish.example'),
+      BASE,
+    ),
+    '/?code=abc',
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost//@evil.com/?code=abc'),
+      BASE,
+    ),
+    null,
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost/\\evil.com?code=abc'),
+      BASE,
+    ),
+    null,
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost/foo?code=abc'),
+      BASE,
+    ),
+    null,
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://evil.example/?code=abc'),
+      BASE,
+    ),
+    null,
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(
+      new URL('https://localhost/?code=abc#/redirect'),
+      BASE,
+    ),
+    '/?code=abc',
+  )
+  assert.equal(
+    safeOAuthReturnAssignHref(new URL('https://localhost/?state=only'), BASE),
+    null,
   )
 }
 

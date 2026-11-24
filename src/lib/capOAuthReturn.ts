@@ -10,11 +10,15 @@
  *
  * Security: only accept OAuth returns on trusted Cap / published schemes +
  * hosts. Arbitrary appUrlOpen URLs with ?code= must not drive navigation.
+ * Assign href is same-origin path+allowlisted query only (no //evil / hash).
  */
-import { isTrustedOAuthReturnUrl } from './oauthReturnUrl'
+import {
+  isTrustedOAuthReturnUrl,
+  safeOAuthReturnAssignHref,
+} from './oauthReturnUrl'
 import { isAndroidNative, isNativeCapacitor } from './platform'
 
-export { isTrustedOAuthReturnUrl }
+export { isTrustedOAuthReturnUrl, safeOAuthReturnAssignHref }
 
 let listening = false
 
@@ -34,11 +38,9 @@ export async function installCapOAuthReturnListener(): Promise<void> {
       } catch {
         return
       }
-      if (!isTrustedOAuthReturnUrl(parsed)) return
 
-      const hasCode = parsed.searchParams.has('code')
-      const hasError = parsed.searchParams.has('error')
-      if (!hasCode && !hasError) return
+      const next = safeOAuthReturnAssignHref(parsed, window.location.origin)
+      if (!next) return
 
       if (!isAndroidNative()) {
         try {
@@ -50,11 +52,10 @@ export async function installCapOAuthReturnListener(): Promise<void> {
 
       // Reload into the Cap WebView with OAuth query so hydrate can run.
       // sessionStorage OAuth state survives same-origin assign (soft-security Cap).
-      // Only path + query + hash — never re-introduce a foreign origin/scheme.
-      const path = parsed.pathname && parsed.pathname !== '' ? parsed.pathname : '/'
-      const next = `${path}${parsed.search}${parsed.hash}`
-      if (window.location.search !== parsed.search) {
-        window.location.assign(next.startsWith('/') ? next : `/${next}`)
+      // next is already a same-origin `/…` href from safeOAuthReturnAssignHref.
+      const nextSearch = new URL(next, window.location.origin).search
+      if (window.location.search !== nextSearch) {
+        window.location.assign(next)
       }
     })
   } catch (err) {
