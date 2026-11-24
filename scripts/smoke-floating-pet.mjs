@@ -51,8 +51,11 @@ try {
   note(`speech bubble: ${await speech.first().innerText()}`)
   await page.screenshot({ path: `${OUT}/02-pet-screen.png`, fullPage: true })
 
-  const growth = await page.locator('.pet-growth-chip').count()
-  note(`growth chips: ${growth}`)
+  const boop = page.getByRole('button', { name: /boop /i })
+  await boop.waitFor({ state: 'visible', timeout: 4000 })
+  note(`boop cta: ${await boop.isVisible()}`)
+  const webgl = await page.locator('.pet-webgl, .pet-webgl-canvas, .pet-stage3d-figure').count()
+  note(`pet stage nodes: ${webgl}`)
 
   // Mood check-in → moodsLogged XP
   await page.getByRole('button', { name: /^close$/i }).click()
@@ -102,17 +105,19 @@ try {
 
   await page.locator('.floating-pet-fab').click()
   await page.waitForTimeout(500)
-  const moodsChip = page.locator('.pet-growth-chip').filter({ hasText: /moods/i })
-  const tasksChip = page.locator('.pet-growth-chip').filter({ hasText: /tasks/i })
-  const moodsText = await moodsChip.innerText()
-  const tasksText = await tasksChip.innerText()
-  note(`moods chip text: ${moodsText}`)
-  note(`tasks chip text: ${tasksText}`)
+  const xpMeta = page.locator('.xp-meta').first()
+  await xpMeta.waitFor({ state: 'visible', timeout: 4000 })
+  const xpText = await xpMeta.innerText()
+  note(`xp meta after growth: ${xpText}`)
+  await page.getByRole('button', { name: /boop /i }).click()
+  await page.waitForTimeout(400)
+  note(`speech after boop: ${await page.locator('.pet-speech-bubble').first().innerText()}`)
   await page.screenshot({ path: `${OUT}/03-after-growth.png`, fullPage: true })
 
-  const moodsOk = pet?.moodsLogged >= 1 && /1/.test(moodsText)
-  const tasksOk = pet?.tasksCompleted >= 1 && /1/.test(tasksText)
-  const ok = growth >= 5 && Number(xpAfterMood) >= 1 && moodsOk && tasksOk
+  const moodsOk = pet?.moodsLogged >= 1
+  const tasksOk = pet?.tasksCompleted >= 1
+  const xpOk = Number(xpAfterMood) >= 1 && /XP\s*\d+/i.test(xpText)
+  const ok = webgl >= 1 && xpOk && moodsOk && tasksOk
   if (!ok) {
     console.error('SMOKE FAIL', log)
     process.exit(1)

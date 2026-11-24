@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import type { PetState } from '../types'
+import type { PetState, PetStoreState } from '../types'
 import {
   growthBreakdown,
   petStage,
@@ -11,12 +11,19 @@ import { PetStage3D } from './PetStage3D'
 
 type Props = {
   pet: PetState
+  store?: PetStoreState | null
   onReact: () => void
   onSpeak?: (line: string) => void
   onOpenScreen?: () => void
 }
 
-export function CompanionPet({ pet, onReact, onSpeak, onOpenScreen }: Props) {
+export function CompanionPet({
+  pet,
+  store,
+  onReact,
+  onSpeak,
+  onOpenScreen,
+}: Props) {
   const xp = petXp(pet)
   const stage = petStage(xp)
   const copy = STAGE_COPY[stage]
@@ -67,6 +74,7 @@ export function CompanionPet({ pet, onReact, onSpeak, onOpenScreen }: Props) {
 
         <PetStage3D
           pet={pet}
+          store={store}
           size="panel"
           speak
           speechIntervalMs={6000}

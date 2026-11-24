@@ -1,30 +1,42 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useCallback } from 'react'
-import type { PetState } from '../types'
+import { useCallback, useMemo, useState } from 'react'
+import type { PetState, PetStoreState } from '../types'
 import {
-  growthBreakdown,
   petStage,
   petXp,
   STAGE_COPY,
   xpForNextStage,
 } from '../lib/pet'
+import { equippedPreview } from '../lib/petStore'
 import { PetStage3D } from './PetStage3D'
 
 type Props = {
   open: boolean
   pet: PetState
+  store?: PetStoreState | null
   onClose: () => void
   onReact: () => void
   onSpeak: (line: string) => void
 }
 
-/** Full-screen dark glass pet room — motion + speech + growth breakdown. */
-export function PetScreen({ open, pet, onClose, onReact, onSpeak }: Props) {
+/** Full-screen dark glass pet room — WebGL Blink + speech, one clear CTA. */
+export function PetScreen({
+  open,
+  pet,
+  store,
+  onClose,
+  onReact,
+  onSpeak,
+}: Props) {
   const xp = petXp(pet)
   const stage = petStage(xp)
   const copy = STAGE_COPY[stage]
   const bar = xpForNextStage(xp)
-  const breakdown = growthBreakdown(pet)
+  const preview = useMemo(
+    () => (store ? equippedPreview(store) : null),
+    [store],
+  )
+  const [boopNonce, setBoopNonce] = useState(0)
 
   const handleSpeak = useCallback(
     (line: string) => {
@@ -78,35 +90,13 @@ export function PetScreen({ open, pet, onClose, onReact, onSpeak }: Props) {
 
             <PetStage3D
               pet={pet}
+              store={store}
               size="hero"
               speak
               onSpeak={handleSpeak}
               onInteract={onReact}
+              interactNonce={boopNonce}
             />
-
-            <p className="pet-screen-blurb">{copy.blurb}</p>
-
-            <div className="pet-stage-rail" aria-hidden>
-              {(['egg', 'hatchling', 'cub', 'glowfox', 'legend'] as const).map(
-                (s, i) => {
-                  const order = [
-                    'egg',
-                    'hatchling',
-                    'cub',
-                    'glowfox',
-                    'legend',
-                  ] as const
-                  const reached = order.indexOf(stage) >= i
-                  return (
-                    <span
-                      key={s}
-                      className={`pet-stage-dot${s === stage ? ' is-active' : ''}${reached ? ' is-reached' : ''}`}
-                      title={STAGE_COPY[s].title}
-                    />
-                  )
-                },
-              )}
-            </div>
 
             <div className="xp-track" aria-hidden>
               <motion.div
@@ -121,20 +111,22 @@ export function PetScreen({ open, pet, onClose, onReact, onSpeak }: Props) {
               <span>{xp >= 24 ? 'Max diva' : `next @ ${bar.next}`}</span>
             </div>
 
-            <ul className="pet-growth-grid" aria-label="How Blink grows">
-              {breakdown.map((row) => (
-                <li key={row.key} className="pet-growth-chip">
-                  <span className="pet-growth-value">{row.value}</span>
-                  <span className="pet-growth-label">{row.label}</span>
-                </li>
-              ))}
-            </ul>
+            {preview && (
+              <p className="pet-screen-fit" aria-label="Equipped look">
+                <span style={{ color: preview.accent }}>{preview.animal}</span>
+                {' · '}
+                {preview.color}
+                {preview.clothes !== 'No fit' ? ` · ${preview.clothes}` : ''}
+              </p>
+            )}
 
-            <p className="pet-screen-note">
-              Grows from pulls, schedules, task completion, journaling, and mood
-              check-ins. CSS 3D motion + speech for Cap/web — true WebGL pet is
-              next.
-            </p>
+            <button
+              type="button"
+              className="btn btn-primary pet-screen-cta"
+              onClick={() => setBoopNonce((n) => n + 1)}
+            >
+              Boop {pet.name}
+            </button>
           </motion.div>
         </motion.div>
       )}
