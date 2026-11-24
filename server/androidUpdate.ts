@@ -10,6 +10,8 @@ export const ANDROID_UPDATE_REPO = 'lumina-adhd-calendar'
 export const ANDROID_TAG_PREFIXES = ['android-debug-', 'android-release-'] as const
 /** Match Cap AppUpdatePlugin MAX_APK_BYTES — hard stop for proxy streams. */
 export const MAX_APK_PROXY_BYTES = 80 * 1024 * 1024
+/** Cache GitHub Releases lookups so /api/android/update is not a hot GitHub fan-out. */
+const GITHUB_RELEASE_CACHE_MS = 5 * 60_000
 
 export type AndroidLatestManifest = {
   versionCode: number
@@ -142,9 +144,88 @@ function pickDownloadUrl(opts: {
   return publicDownloadUrl(opts.tag, opts.asset)
 }
 
+type LatestReleaseCache = {
+  at: number
+  value: ResolvedAndroidUpdate | { ok: false; error: string; hint: string }
+}
+
+let latestReleaseCache: LatestReleaseCache | null = null
+
+/** Test helper — drop the in-memory GitHub latest-release cache. */
+export function clearAndroidUpdateCache(): void {
+  latestReleaseCache = null
+  releaseTagCache.clear()
+}
+
+const releaseTagCache = new Map<
+  string,
+  { at: number; release: GhRelease | { missing: true } }
+>()
+
+async function loadReleaseByTag(
+  tag: string,
+): Promise<
+  | { ok: true; release: GhRelease }
+  | { ok: false; status: number; error: string; hint: string }
+> {
+  const cached = releaseTagCache.get(tag)
+  if (cached && Date.now() - cached.at < GITHUB_RELEASE_CACHE_MS) {
+    if ('missing' in cached.release) {
+      return {
+        ok: false,
+        status: 404,
+        error: 'release_lookup_failed',
+        hint: 'Could not load GitHub release metadata.',
+      }
+    }
+    return { ok: true, release: cached.release }
+  }
+
+  const metaUrl =
+    `https://api.github.com/repos/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases/tags/${encodeURIComponent(tag)}`
+  let metaRes: Response
+  try {
+    metaRes = await fetch(metaUrl, { headers: githubHeaders() })
+  } catch (e) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'github_network',
+      hint: e instanceof Error ? e.message : 'Could not reach GitHub.',
+    }
+  }
+
+  if (!metaRes.ok) {
+    if (metaRes.status === 404) {
+      releaseTagCache.set(tag, { at: Date.now(), release: { missing: true } })
+    }
+    return {
+      ok: false,
+      status: metaRes.status === 404 ? 404 : 502,
+      error: 'release_lookup_failed',
+      hint:
+        metaRes.status === 401 || metaRes.status === 403
+          ? 'GitHub blocked the release lookup (rate limit). Retry later or optionally bind GITHUB_TOKEN.'
+          : 'Could not load GitHub release metadata.',
+    }
+  }
+
+  const release = (await metaRes.json()) as GhRelease
+  releaseTagCache.set(tag, { at: Date.now(), release })
+  return { ok: true, release }
+}
+
 export async function fetchLatestGithubAndroidRelease(): Promise<
   ResolvedAndroidUpdate | { ok: false; error: string; hint: string }
 > {
+  const now = Date.now()
+  if (
+    latestReleaseCache &&
+    now - latestReleaseCache.at < GITHUB_RELEASE_CACHE_MS
+  ) {
+    return latestReleaseCache.value
+  }
+
   const url =
     `https://api.github.com/repos/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases?per_page=20`
   let res: Response
@@ -190,11 +271,13 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
       pickApkAsset(r.assets || []),
   )
   if (!match) {
-    return {
-      ok: false,
+    const miss = {
+      ok: false as const,
       error: 'no_android_release',
       hint: 'No android-debug-* / android-release-* GitHub Release with an APK asset.',
     }
+    latestReleaseCache = { at: now, value: miss }
+    return miss
   }
 
   const asset = pickApkAsset(match.assets)!
@@ -211,7 +294,7 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
     asset: asset.name,
   })
 
-  return {
+  const value: ResolvedAndroidUpdate = {
     ok: true,
     source: 'github',
     proxyAvailable,
@@ -229,6 +312,9 @@ export async function fetchLatestGithubAndroidRelease(): Promise<
     installHint:
       'Download the public GitHub Release APK, then open the system installer.',
   }
+  latestReleaseCache = { at: now, value }
+  releaseTagCache.set(match.tag_name, { at: now, release: match })
+  return value
 }
 
 export function resolveFromManifest(
@@ -267,13 +353,26 @@ export function resolveFromManifest(
   }
 }
 
-/** Stream a release asset. Public repos need no token; token is optional fallback. */
+/**
+ * Resolve a release asset for download.
+ * Prefer a public redirect URL (no egress through this host). Streaming is a
+ * private-asset / last-resort fallback only.
+ */
 export async function fetchGithubReleaseAsset(opts: {
   tag: string
   asset: string
+  /** When true, return a public GitHub URL instead of proxying bytes. */
+  preferRedirect?: boolean
 }): Promise<
   | {
       ok: true
+      mode: 'redirect'
+      url: string
+      filename: string
+    }
+  | {
+      ok: true
+      mode: 'stream'
       body: ReadableStream<Uint8Array> | null
       size: number | null
       contentType: string
@@ -308,34 +407,10 @@ export async function fetchGithubReleaseAsset(opts: {
     }
   }
 
-  const metaUrl =
-    `https://api.github.com/repos/${ANDROID_UPDATE_OWNER}/${ANDROID_UPDATE_REPO}/releases/tags/${encodeURIComponent(tag)}`
-  let metaRes: Response
-  try {
-    metaRes = await fetch(metaUrl, { headers: githubHeaders() })
-  } catch (e) {
-    return {
-      ok: false,
-      status: 502,
-      error: 'github_network',
-      hint: e instanceof Error ? e.message : 'Could not reach GitHub.',
-    }
-  }
+  const looked = await loadReleaseByTag(tag)
+  if (!looked.ok) return looked
 
-  if (!metaRes.ok) {
-    return {
-      ok: false,
-      status: metaRes.status === 404 ? 404 : 502,
-      error: 'release_lookup_failed',
-      hint:
-        metaRes.status === 401 || metaRes.status === 403
-          ? 'GitHub blocked the release lookup (rate limit). Retry later or optionally bind GITHUB_TOKEN.'
-          : 'Could not load GitHub release metadata.',
-    }
-  }
-
-  const release = (await metaRes.json()) as GhRelease
-  const withId = (release.assets || []).find((a) => a.name === asset)
+  const withId = (looked.release.assets || []).find((a) => a.name === asset)
   if (!withId) {
     return {
       ok: false,
@@ -355,7 +430,17 @@ export async function fetchGithubReleaseAsset(opts: {
     }
   }
 
-  // 1) Public browser URL (no auth) — preferred for silent Cap download via proxy too.
+  // Prefer public redirect — client downloads from GitHub, not through us.
+  if (opts.preferRedirect !== false && withId.browser_download_url) {
+    return {
+      ok: true,
+      mode: 'redirect',
+      url: withId.browser_download_url,
+      filename: withId.name,
+    }
+  }
+
+  // Stream fallback (private assets / redirect disabled).
   if (withId.browser_download_url) {
     try {
       const publicRes = await fetch(withId.browser_download_url, {
@@ -368,6 +453,7 @@ export async function fetchGithubReleaseAsset(opts: {
       if (publicRes.ok) {
         return {
           ok: true,
+          mode: 'stream',
           body: limitApkStream(publicRes.body),
           size: declaredSize,
           contentType: 'application/vnd.android.package-archive',
@@ -379,7 +465,6 @@ export async function fetchGithubReleaseAsset(opts: {
     }
   }
 
-  // 2) GitHub API asset URL — works publicly for public repos; token helps if private.
   if (!withId.url) {
     return {
       ok: false,
@@ -407,6 +492,7 @@ export async function fetchGithubReleaseAsset(opts: {
 
   return {
     ok: true,
+    mode: 'stream',
     body: limitApkStream(apkRes.body),
     size: declaredSize,
     contentType: 'application/vnd.android.package-archive',

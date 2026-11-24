@@ -40,9 +40,10 @@ async function loadStaticManifest(): Promise<AndroidLatestManifest | null> {
  * Tries GitHub Releases (token optional), falls back to public/android-latest.json.
  */
 export async function GET(request: Request): Promise<Response> {
+  // Metadata is cached in androidUpdate.ts; keep this blunt against fans.
   const limit = takeRateLimit(
     `android-update:${clientKeyFromRequest(request)}`,
-    60,
+    30,
     60_000,
   )
   if (!limit.allowed) {

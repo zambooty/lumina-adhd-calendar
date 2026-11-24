@@ -14,15 +14,19 @@ import {
   fetchGithubReleaseAsset,
 } from '../../server/androidUpdate.js'
 
+/** Soft cap on concurrent APK proxy streams through this process. */
+let activeApkStreams = 0
+const MAX_CONCURRENT_APK_STREAMS = 2
+
 /**
- * GET /api/android/apk?tag=&asset= — stream APK from GitHub Releases.
- * Public assets need no token; optional GITHUB_TOKEN is a rate-limit / private fallback.
- * Hard size cap + tighter rate limit to avoid unbounded egress.
+ * GET /api/android/apk?tag=&asset= — resolve APK from GitHub Releases.
+ * Prefers a 302 to the public GitHub download URL (no host egress).
+ * Streams only as a last resort (private assets), with size + concurrency caps.
  */
 export async function GET(request: Request): Promise<Response> {
   const limit = takeRateLimit(
     `android-apk:${clientKeyFromRequest(request)}`,
-    8,
+    4,
     60_000,
   )
   if (!limit.allowed) {
@@ -36,13 +40,39 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const tag = url.searchParams.get('tag') || ''
   const asset = url.searchParams.get('asset') || 'lumina-debug.apk'
+  const forceStream = url.searchParams.get('stream') === '1'
 
-  const result = await fetchGithubReleaseAsset({ tag, asset })
+  const result = await fetchGithubReleaseAsset({
+    tag,
+    asset,
+    preferRedirect: !forceStream,
+  })
   if (!result.ok) {
     return jsonWithCors(
       request,
       { ok: false, error: result.error, hint: result.hint },
       { status: result.status },
+    )
+  }
+
+  if (result.mode === 'redirect') {
+    const headers = new Headers({ Location: result.url, ...NO_STORE })
+    const cors = withCors(request, { headers }).headers
+    return new Response(null, {
+      status: 302,
+      headers: cors ? new Headers(cors) : headers,
+    })
+  }
+
+  if (activeApkStreams >= MAX_CONCURRENT_APK_STREAMS) {
+    return jsonWithCors(
+      request,
+      {
+        ok: false,
+        error: 'apk_busy',
+        hint: 'Too many APK downloads in flight — retry shortly, or use the public GitHub release URL.',
+      },
+      { status: 503 },
     )
   }
 
@@ -56,6 +86,35 @@ export async function GET(request: Request): Promise<Response> {
       },
       { status: 413 },
     )
+  }
+
+  activeApkStreams += 1
+  let released = false
+  const releaseSlot = () => {
+    if (released) return
+    released = true
+    activeApkStreams = Math.max(0, activeApkStreams - 1)
+  }
+
+  const upstream = result.body
+  const body =
+    upstream == null
+      ? null
+      : upstream.pipeThrough(
+          new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, controller) {
+              controller.enqueue(chunk)
+            },
+            flush() {
+              releaseSlot()
+            },
+          }),
+        )
+
+  if (body) {
+    request.signal.addEventListener('abort', releaseSlot, { once: true })
+  } else {
+    releaseSlot()
   }
 
   const headers = new Headers()
@@ -74,8 +133,9 @@ export async function GET(request: Request): Promise<Response> {
   }
   headers.set('cache-control', 'private, no-store')
   headers.set('x-lumina-apk-max-bytes', String(MAX_APK_PROXY_BYTES))
+  headers.set('x-lumina-apk-mode', 'stream')
 
-  return new Response(result.body, { status: 200, headers })
+  return new Response(body, { status: 200, headers })
 }
 
 export function OPTIONS(request: Request): Response {
