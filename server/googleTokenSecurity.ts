@@ -67,16 +67,21 @@ export function refreshRateLimit(clientKey: string): RateLimitResult {
 }
 
 /**
- * Rate-limit client key that resists X-Forwarded-For spoofing.
+ * Rate-limit client key that resists header spoofing as much as a single
+ * process can without a trusted-proxy hop count.
  *
- * Visitors can prepend hops to XFF; the edge appends the real client IP, so
- * we take the *last* hop (not the first). Prefer platform-set X-Real-IP when
- * present. Mix Origin into the key so one spoofed IP cannot widen every
- * origin's budget.
+ * Prefer platform-set client IP headers (X-Real-IP / CF-Connecting-IP /
+ * True-Client-IP). Visitors can prepend XFF hops; when those are all we have,
+ * take the *last* hop (edge-appended). Do **not** mix Origin into the key —
+ * callers control Origin and could mint a fresh bucket per value.
  */
 export function clientKeyFromRequest(request: Request): string {
-  const real = request.headers.get('x-real-ip')?.trim()
-  let ip = real && real.length > 0 ? real.slice(0, 128) : ''
+  const platformIp =
+    request.headers.get('x-real-ip')?.trim() ||
+    request.headers.get('cf-connecting-ip')?.trim() ||
+    request.headers.get('true-client-ip')?.trim() ||
+    ''
+  let ip = platformIp.length > 0 ? platformIp.slice(0, 128) : ''
   if (!ip) {
     const xf = request.headers.get('x-forwarded-for')
     if (xf) {
@@ -88,8 +93,7 @@ export function clientKeyFromRequest(request: Request): string {
       if (last) ip = last.slice(0, 128)
     }
   }
-  const origin = (request.headers.get('origin') || '').trim().slice(0, 128)
-  const material = `${ip || 'unknown'}|${origin || 'no-origin'}`
+  const material = ip || 'unknown'
   return createHash('sha256')
     .update(`${RATE_LIMIT_SALT}|${material}`)
     .digest('hex')

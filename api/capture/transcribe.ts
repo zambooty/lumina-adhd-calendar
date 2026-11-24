@@ -2,11 +2,13 @@ import { readCaptureEnv, readWhisperApiKey } from '../../server/captureEnv.js'
 import { isAllowedRequestOrigin } from '../../server/originAllowlist.js'
 import { requireGoogleAccessAuth } from '../../server/googleAccessAuth.js'
 import {
+  clientKeyFromRequest,
   isTranscribeCallerAllowed,
   rateLimitedResponse,
   transcribeCallerRateLimit,
   transcribeGlobalRateLimit,
   transcribeMaxBytes,
+  transcribePreAuthRateLimit,
   whisperSpendEnabled,
 } from '../../server/captureSecurity.js'
 import {
@@ -20,11 +22,12 @@ import {
  *
  * Spend gate (fail-closed for a public app):
  *   1. Origin allowlist
- *   2. Whisper/OpenAI key bound
- *   3. CAPTURE_TRANSCRIBE_ALLOWED_EMAILS and/or _SUBS configured
- *   4. Caller Google access token verified for this GOOGLE_CLIENT_ID
- *   5. Caller's email/sub is on the allowlist (any Google user is not enough)
- *   6. Per-subject + global rate limits (not spoofable X-Forwarded-For)
+ *   2. Pre-auth IP rate limit (before Google tokeninfo)
+ *   3. Whisper/OpenAI key bound
+ *   4. CAPTURE_TRANSCRIBE_ALLOWED_EMAILS and/or _SUBS configured
+ *   5. Caller Google access token verified for this GOOGLE_CLIENT_ID
+ *   6. Caller's email/sub is on the allowlist (any Google user is not enough)
+ *   7. Per-subject + global rate limits
  *
  * When the allowlist is empty, returns 503 — paste a transcript instead.
  * Never leaks keys.
@@ -32,6 +35,15 @@ import {
 export async function POST(request: Request): Promise<Response> {
   if (!isAllowedRequestOrigin(request)) {
     return jsonWithCors(request, { error: 'forbidden_origin' }, { status: 403 })
+  }
+
+  const preAuth = transcribePreAuthRateLimit(clientKeyFromRequest(request))
+  if (!preAuth.allowed) {
+    const limited = rateLimitedResponse(preAuth)
+    return new Response(
+      limited.body,
+      withCors(request, { status: limited.status, headers: limited.headers }),
+    )
   }
 
   const env = readCaptureEnv()
