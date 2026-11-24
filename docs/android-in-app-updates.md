@@ -38,8 +38,9 @@ Do not embed a PAT inside the APK.
 
 ## Debug sideload (current path)
 
-- Works with the usual **debug-signed** APK from `npm run android:debug`.
-- In-place upgrade requires the **same debug keystore** that signed the installed app. If install fails with a signature mismatch, uninstall LUMINA once, then install the new APK.
+- Works with the usual **debug-signed** APK from `npm run android:debug` (Android SDK default `~/.android/debug.keystore` — no keystore in the repo).
+- In-place upgrade requires the **same** signing certificate as the installed app. Different machines use different default debug keys → “package conflicts” means uninstall once, then install the new APK.
+- Do **not** commit a custom keystore or put `storePassword` / `keyPassword` in tracked Gradle files (blocked by Cursor publish security review).
 - Tag pattern: `android-debug-*` with asset `lumina-debug.apk`.
 
 ## Signed release path (when you want it)
@@ -55,10 +56,10 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 
 ## Current debug build (shipped)
 
-- Release: [`android-debug-2026-11-24-1.1.2`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.2)
-- `versionCode` **4** / `1.1.2-debug` — signed with the shared Cap debug keystore (local/agent only; **not** in the web ship package)
+- Release: [`android-debug-2026-11-24-1.1.3`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.3)
+- `versionCode` **5** / `1.1.3-debug`
 - Manifest: `public/android-latest.json` (keep in sync on every publish)
-- If Android reports **package conflicts**, uninstall once, then install 1.1.2+ (older cloud builds used different machine-local debug keys).
+- If Android reports **package conflicts**, uninstall once, then install the latest APK.
 
 ## API
 
