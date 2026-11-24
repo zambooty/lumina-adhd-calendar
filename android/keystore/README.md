@@ -1,13 +1,21 @@
-# LUMINA debug keystore
+# LUMINA debug keystore (local only)
 
-`lumina-debug.keystore` is the **shared debug signing key** for Cap sideload APKs.
+The Cap debug signing keystore is **not** shipped in the web app package and
+**must not** be committed.
 
-Android only allows in-place upgrades when the new APK is signed with the **same** certificate as the installed app. Agent/CI machines each generate a different `~/.android/debug.keystore`, which produces “App not installed as package conflicts with an existing package.”
+Android only allows in-place upgrades when the new APK uses the same signing
+certificate as the installed app. Place the shared debug keystore on the build
+machine (not in git), then point Gradle at it via `android/local.properties`
+(also gitignored):
 
-This project keystore is intentional for debug sideload continuity — not a Play Store / release key. Keep release signing elsewhere (private secrets).
+```
+lumina.debug.storeFile=keystore/lumina-debug.keystore
+lumina.debug.storePassword=…
+lumina.debug.keyAlias=…
+lumina.debug.keyPassword=…
+```
 
-| | |
-|---|---|
-| Alias | `lumina-debug` |
-| Store / key password | `android` |
-| Used by | `android/app/build.gradle` `signingConfigs.debug` |
+Restore helpers: `npm run android:ensure-debug-keystore` (copies from the
+project media signing folder when available on agent machines).
+
+Release / Play signing stays elsewhere — never put release secrets in the repo.

@@ -8,5 +8,5 @@
   "sha256": "c852cc612589a0991a6f4f140e2bdf0bee04bf5e4691441faee83b7101e3e44f",
   "publishedAt": "2026-11-24T15:28:54Z",
   "channel": "debug",
-  "notes": "Android debug 1.1.2 (versionCode 4) — shared project debug keystore for in-place Cap updates. If package conflicts, uninstall once then install. Built with stable android/keystore/lumina-debug.keystore."
+  "notes": "Android debug 1.1.2 (versionCode 4) — stable Cap debug signing for in-place updates. If package conflicts, uninstall once then install."
 }

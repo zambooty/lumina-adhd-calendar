@@ -19,6 +19,11 @@ android/local.properties
 *.ap_
 # APKs stay out of the web publish package (download from GitHub Releases).
 
+# Cap debug signing keystore — keep out of git + Cursor web publish (signing
+# material must not be readable on the published host). Use local.properties.
+android/keystore/*.keystore
+android/keystore/*.jks
+
 # Gradle wrapper jar — needed for Cap Android builds, excluded from the Cursor
 # web publish package (binary-in-package review). Properties stay tracked;
 # restore with: node scripts/ensure-gradle-wrapper.mjs (also via android:debug).

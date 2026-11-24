@@ -30,7 +30,7 @@ Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointmen
 |---|---|
 | Size | ~4.3 MB |
 | SHA-256 | `c852cc612589a0991a6f4f140e2bdf0bee04bf5e4691441faee83b7101e3e44f` |
-| Built from | `main` + stable debug keystore |
+| Built from | `main` (stable Cap debug signing) |
 | versionCode | `4` (`1.1.2-debug`) |
 | App ID | `com.makesoft.lumina` |
 
