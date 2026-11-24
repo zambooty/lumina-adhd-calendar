@@ -28,7 +28,7 @@ export function UpcomingList({
   if (events.length === 0) {
     return (
       <p className="empty">
-        No events yet — connect Google and pull, or add from the inbox.
+        No events yet — connect Google, then Pull.
       </p>
     )
   }

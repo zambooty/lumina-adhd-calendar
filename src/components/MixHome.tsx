@@ -21,6 +21,7 @@ import { dayKey, todosForDay } from '../lib/dailyTodos'
 import { CalendarView } from './CalendarView'
 import { UpcomingList } from './UpcomingList'
 import { DailyTodoList } from './DailyTodoList'
+import { ConnectPullGuide } from './ConnectPullGuide'
 
 type Props = {
   events: CalendarEvent[]
@@ -50,6 +51,7 @@ type Props = {
   onRemoveDailyTodo?: (todoId: string) => void
   onSetTodoRepeat?: (todoId: string, repeat: TodoRepeat) => void
   onOpenAgenda?: () => void
+  onPull?: () => void | Promise<void>
 }
 
 export function MixHome({
@@ -69,6 +71,7 @@ export function MixHome({
   onRemoveDailyTodo,
   onSetTodoRepeat,
   onOpenAgenda,
+  onPull,
 }: Props) {
   const [now, setNow] = useState(() => new Date())
 
@@ -112,7 +115,9 @@ export function MixHome({
           role="status"
           aria-live="polite"
         >
-          <div className="mix-now-label">NOW</div>
+          <div className="mix-now-label">
+            {nowEvent ? 'NOW' : 'GET STARTED'}
+          </div>
           {nowEvent ? (
             <>
               <button
@@ -133,13 +138,20 @@ export function MixHome({
                 <span style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
             </>
+          ) : onPull ? (
+            <>
+              <ConnectPullGuide onPull={onPull} />
+              <div className="mix-progress" aria-hidden>
+                <span style={{ width: '8%' }} />
+              </div>
+            </>
           ) : (
             <>
               <h2 className="mix-now-title mix-now-title--static">
                 Nothing next
               </h2>
               <p className="mix-now-meta">
-                Pull appointments in — Blink is waiting to glow.
+                Connect Google, then Pull — Blink is waiting to glow.
               </p>
               <div className="mix-progress" aria-hidden>
                 <span style={{ width: '8%' }} />
