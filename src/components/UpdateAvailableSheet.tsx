@@ -87,7 +87,9 @@ export function UpdateAvailableSheet({
             </div>
             <p className="update-sheet-lead">
               Sideload updates from GitHub Releases — same dark glass shell, no
-              Play Store required.
+              Play Store required. If Android says the package conflicts,
+              uninstall LUMINA once, then install this build (one-time signing
+              change); later updates install in place.
             </p>
 
             <section className="mix-glass update-card">
@@ -200,8 +202,9 @@ export function UpdateAvailableSheet({
             <div className="update-blink-row">
               <span className="update-blink-orb" aria-hidden />
               <span>
-                Same signing key required (debug keystore or release). Pull /
-                SMS / Google stay untouched.
+                Same signing key required for in-place upgrades. Package
+                conflict → uninstall once, then install 1.1.2+. Pull / SMS /
+                Google stay untouched.
               </span>
             </div>
           </motion.div>

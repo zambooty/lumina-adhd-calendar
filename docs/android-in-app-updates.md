@@ -55,10 +55,10 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 
 ## Current debug build (shipped)
 
-- Release: [`android-debug-2026-11-24-1.1.1`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.1)
-- `versionCode` **3** / `1.1.1-debug` — includes **AppUpdate** plugin + SHA-256 verify
+- Release: [`android-debug-2026-11-24-1.1.2`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.2)
+- `versionCode` **4** / `1.1.2-debug` — **shared** `android/keystore/lumina-debug.keystore` (required for in-place Cap updates)
 - Manifest: `public/android-latest.json` (keep in sync on every publish)
-- First install of this APK (or newer) enables Menu → **Check for updates**. Older `versionCode` 1–2 builds still update via GitHub / in-app check.
+- If Android reports **package conflicts**, uninstall once, then install 1.1.2+ (older cloud builds used different machine-local debug keys).
 
 ## API
 

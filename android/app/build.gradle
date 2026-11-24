@@ -8,8 +8,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump on every published APK; in-app updater compares this to GitHub / android-latest.json
-        versionCode 3
-        versionName "1.1.1-debug"
+        versionCode 4
+        versionName "1.1.2-debug"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,7 +17,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Shared debug keystore so Cap in-app updates can upgrade in place across CI/agent builds.
+    // (Default ~/.android/debug.keystore is machine-local and causes "package conflicts".)
+    signingConfigs {
+        debug {
+            storeFile file('../keystore/lumina-debug.keystore')
+            storePassword 'android'
+            keyAlias 'lumina-debug'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
