@@ -5,18 +5,18 @@ import type {
   PetState,
   ReminderStack,
 } from '../types'
+import { formatLeaveIn } from '../lib/duration'
 import { safeFormatIso } from '../lib/safeDate'
 import { petXp } from '../lib/pet'
 import {
   buildDayRibbon,
   leaveProgress,
   minutesUntilLeave,
-  nextUpEvents,
   pickNowEvent,
   stackArmed,
 } from '../lib/mixFocus'
 import { CalendarView } from './CalendarView'
-import { resolveEventCategory } from '../lib/taskCategories'
+import { UpcomingList } from './UpcomingList'
 
 type Props = {
   events: CalendarEvent[]
@@ -61,7 +61,6 @@ export function MixHome({
     () => buildDayRibbon(events, focusId, now),
     [events, focusId, now],
   )
-  const nextUp = useMemo(() => nextUpEvents(events, now, 3), [events, now])
 
   const leaveMins =
     nowEvent != null ? minutesUntilLeave(nowEvent, stacks, now) : null
@@ -70,16 +69,11 @@ export function MixHome({
   const armed = nowEvent != null && stackArmed(nowEvent, stacks)
   const xp = petXp(pet)
 
-  const leaveCopy =
-    leaveMins == null
-      ? null
-      : leaveMins <= 0
-        ? 'Leave now'
-        : leaveMins === 1
-          ? 'Leave in 1 minute'
-          : leaveMins >= 60
-            ? `Leave in ${Math.round(leaveMins / 60)}hr`
-            : `Leave in ${leaveMins} minutes`
+  function openEvent(eventId: string) {
+    onOpenEvent?.(eventId)
+  }
+
+  const leaveCopy = leaveMins == null ? null : formatLeaveIn(leaveMins)
 
   return (
     <div className="mix-home">
@@ -95,7 +89,7 @@ export function MixHome({
               <button
                 type="button"
                 className="mix-now-title"
-                onClick={() => onOpenEvent?.(nowEvent.id)}
+                onClick={() => openEvent(nowEvent.id)}
               >
                 {nowEvent.title}
               </button>
@@ -134,7 +128,7 @@ export function MixHome({
                 block.accent ? ` mix-block--${block.accent}` : ''
               }`}
               disabled={!block.eventId}
-              onClick={() => block.eventId && onOpenEvent?.(block.eventId)}
+              onClick={() => block.eventId && openEvent(block.eventId)}
             >
               <span
                 className={`mix-block-time${
@@ -161,6 +155,21 @@ export function MixHome({
           onFocusConsumed={onFocusConsumed}
         />
 
+        <section className="mix-glass mix-upcoming" aria-label="Upcoming">
+          <div className="mix-upcoming-head">
+            <h2 className="mix-rail-title">Upcoming</h2>
+            <p className="mix-rail-hint">What&apos;s next — stacks included.</p>
+          </div>
+          <div className="mix-upcoming-body">
+            <UpcomingList
+              events={events}
+              stacks={stacks}
+              onChangeStack={onChangeStack}
+              onOpenEvent={openEvent}
+            />
+          </div>
+        </section>
+
         <div className="mix-whisper mix-whisper--mobile" aria-live="polite">
           <span className="mix-whisper-orb" aria-hidden />
           <span>
@@ -170,33 +179,7 @@ export function MixHome({
         </div>
       </div>
 
-      <aside className="mix-glass mix-rail" aria-label="Next up">
-        <h2 className="mix-rail-title">Next up</h2>
-        <p className="mix-rail-hint">Three things. That&apos;s enough.</p>
-        {nextUp.length === 0 ? (
-          <p className="mix-rail-empty">Calendar clear — breathe.</p>
-        ) : (
-          nextUp.map((e) => {
-            const color = resolveEventCategory(e).color
-            return (
-              <button
-                key={e.id}
-                type="button"
-                className="mix-chip"
-                style={{ ['--chip-accent' as string]: color }}
-                onClick={() => onOpenEvent?.(e.id)}
-              >
-                <span className="mix-chip-bar" aria-hidden />
-                <span className="mix-chip-body">
-                  <span className="mix-chip-title">{e.title}</span>
-                  <span className="mix-chip-meta">
-                    {safeFormatIso(e.start, 'EEE h:mm')}
-                  </span>
-                </span>
-              </button>
-            )
-          })
-        )}
+      <aside className="mix-glass mix-rail" aria-label="Blink">
         <div className="mix-whisper mix-whisper--rail">
           <span className="mix-whisper-orb" aria-hidden />
           <span>
