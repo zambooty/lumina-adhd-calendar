@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   AppState,
+  CalendarEntryKind,
   CalendarEvent,
   EventCandidate,
   ReminderOffset,
   ReminderStack,
 } from '../types'
+import { categoryById, DEFAULT_CATEGORY_ID } from '../lib/taskCategories'
 import { loadState, resetState, saveState } from '../lib/storage'
 import { clearGoogleToken } from '../lib/googleAuth'
 import { pullAllSources } from '../connectors'
@@ -330,6 +332,87 @@ export function useAppState() {
     })
   }, [])
 
+  const setEventCategory = useCallback((eventId: string, categoryId: string) => {
+    const cat = categoryById(categoryId)
+    setState((s) => ({
+      ...s,
+      events: s.events.map((e) =>
+        e.id === eventId
+          ? { ...e, categoryId: cat.id, color: cat.color }
+          : e,
+      ),
+    }))
+  }, [])
+
+  const addManualEntry = useCallback(
+    (input: {
+      title: string
+      start: string
+      end: string
+      kind: CalendarEntryKind
+      categoryId?: string
+      notes?: string
+    }): string => {
+      const cat = categoryById(input.categoryId ?? DEFAULT_CATEGORY_ID)
+      const title = input.title.trim() || (
+        input.kind === 'note'
+          ? 'Note'
+          : input.kind === 'reminder'
+            ? 'Reminder'
+            : 'Event'
+      )
+      const eventId = uid('evt')
+      const bag: { event: CalendarEvent | null; stacks: ReminderStack[] } = {
+        event: null,
+        stacks: [],
+      }
+      setState((s) => {
+        const event: CalendarEvent = {
+          id: eventId,
+          title,
+          start: input.start,
+          end: input.end,
+          notes: input.notes,
+          color: cat.color,
+          categoryId: cat.id,
+          entryKind: input.kind,
+          sourceLabel:
+            input.kind === 'note'
+              ? 'Note'
+              : input.kind === 'reminder'
+                ? 'Reminder'
+                : 'Event',
+          reminderStackId: s.defaultStackId,
+          createdAt: new Date().toISOString(),
+        }
+        bag.event = event
+        bag.stacks = s.stacks
+        return {
+          ...s,
+          events: [...s.events, event].sort(
+            (a, b) => +new Date(a.start) - +new Date(b.start),
+          ),
+          pet: {
+            ...s.pet,
+            eventsScheduled: s.pet.eventsScheduled + 1,
+          },
+        }
+      })
+      flash(
+        input.kind === 'note'
+          ? 'Note parked on the day'
+          : input.kind === 'reminder'
+            ? 'Reminder set · stack attached'
+            : 'Event added · stack attached',
+      )
+      if (input.kind !== 'note' && bag.event) {
+        void scheduleEventNotifications(bag.event, bag.stacks)
+      }
+      return eventId
+    },
+    [flash],
+  )
+
   const setEventOverride = useCallback(
     (eventId: string, offsets: ReminderOffset[] | undefined) => {
       setState((s) => {
@@ -410,6 +493,8 @@ export function useAppState() {
     setDefaultStack,
     updateStack,
     setEventStack,
+    setEventCategory,
+    addManualEntry,
     setEventOverride,
     toggleAutoAdd,
     petReact,

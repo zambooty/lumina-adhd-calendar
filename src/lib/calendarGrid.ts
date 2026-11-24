@@ -3,11 +3,14 @@ import {
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
+  endOfYear,
   isSameDay,
   isSameMonth,
+  setMonth,
   startOfDay,
   startOfMonth,
   startOfWeek,
+  startOfYear,
 } from 'date-fns'
 import type { CalendarEvent } from '../types'
 import { safeParseIso } from './safeDate'
@@ -23,6 +26,16 @@ export function monthMatrix(anchor: Date): Date[] {
 export function weekDays(anchor: Date): Date[] {
   const start = startOfWeek(anchor, { weekStartsOn: WEEK_STARTS_ON })
   return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+}
+
+/** Twelve month anchors for the year view (Jan–Dec of `anchor`'s year). */
+export function yearMonths(anchor: Date): Date[] {
+  const jan = startOfYear(anchor)
+  return Array.from({ length: 12 }, (_, i) => setMonth(jan, i))
+}
+
+export function eventsInYear(events: CalendarEvent[], anchor: Date): CalendarEvent[] {
+  return eventsInRange(events, startOfYear(anchor), endOfYear(anchor))
 }
 
 export function eventStartDate(event: CalendarEvent): Date | null {
