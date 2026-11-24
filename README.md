@@ -275,12 +275,15 @@ Capture API: `GET /api/capture/status`, `POST /api/capture/transcribe`, `POST /a
 | `CAPTURE_TRANSCRIBE_MAX_BYTES` | `10485760` (10MB) | Multipart upload cap |
 | `CAPTURE_TRANSCRIBE_RATE_LIMIT_PER_MIN` | `10` | Per client IP |
 | `CAPTURE_STATUS_RATE_LIMIT_PER_MIN` | `60` | Per client IP (nonce mint) |
+| `CAPTURE_TWILIO_SMS_MAX_BYTES` | `16384` (16KB) | Webhook body byte cap |
+| `CAPTURE_TWILIO_SMS_BODY_MAX_CHARS` | `2048` | Max `Body` field length |
+| `CAPTURE_TWILIO_SMS_RATE_LIMIT_PER_MIN` | `30` | Per client IP |
 | `PUBLIC_APP_ORIGIN` | published host | Also used as Twilio signature URL base |
 
 Hardening on capture routes:
 
 - **Transcribe** — **requires a live Google access token** for this app’s `GOOGLE_CLIENT_ID` (verified with Google tokeninfo; `Authorization: Bearer …`). Spoofed Origin alone cannot spend Whisper. Also: origin allowlist, size + rate limits; disabled when Whisper/OpenAI unbound; no key/upstream leakage. Paste transcript still works without Google.
-- **Twilio SMS** — when configured, requires valid `X-Twilio-Signature` (HMAC-SHA1); unsigned requests → `403`.
+- **Twilio SMS** — when configured, requires valid `X-Twilio-Signature` (HMAC-SHA1); unsigned requests → `403`. Body size + per-IP rate limits before signature verify.
 
 Native Notes / SMS / voicemail hooks for the Capacitor wrap: `docs/android-native-capture.md`.
 

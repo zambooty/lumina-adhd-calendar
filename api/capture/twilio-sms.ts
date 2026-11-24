@@ -1,7 +1,13 @@
 import { readCaptureEnv } from '../../server/captureEnv.js'
 import {
   NO_STORE,
+  clientKeyFromRequest,
+  rateLimitedResponse,
+  readRequestTextCapped,
   readTwilioAuthToken,
+  twilioSmsBodyMaxChars,
+  twilioSmsMaxBytes,
+  twilioSmsRateLimit,
   twilioWebhookUrl,
   verifyTwilioSignature,
 } from '../../server/captureSecurity.js'
@@ -11,6 +17,7 @@ import {
  *
  * When Twilio secrets are unbound, returns 503 with an honest message.
  * When bound, requires a valid `X-Twilio-Signature` (rejects unsigned).
+ * Body size + per-client rate limits apply before signature verify.
  *
  * Twilio form fields: Body, From, To, MessageSid
  */
@@ -34,20 +41,32 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
+  const limit = twilioSmsRateLimit(clientKeyFromRequest(request))
+  if (!limit.allowed) {
+    return rateLimitedResponse(limit)
+  }
+
+  const capped = await readRequestTextCapped(request, twilioSmsMaxBytes())
+  if (!capped.ok) {
+    return Response.json(
+      { error: 'payload_too_large' },
+      { status: 413, headers: NO_STORE },
+    )
+  }
+
   let params: Record<string, string> = {}
   try {
     const ct = request.headers.get('content-type') ?? ''
-    if (ct.includes('application/x-www-form-urlencoded') || !ct.includes('application/json')) {
-      const text = await request.text()
-      const search = new URLSearchParams(text)
-      for (const [key, value] of search.entries()) {
-        params[key] = value
-      }
-    } else {
-      const json = (await request.json()) as Record<string, unknown>
+    if (ct.includes('application/json')) {
+      const json = JSON.parse(capped.text || '{}') as Record<string, unknown>
       for (const [key, value] of Object.entries(json)) {
         if (value == null) continue
         params[key] = String(value)
+      }
+    } else {
+      const search = new URLSearchParams(capped.text)
+      for (const [key, value] of search.entries()) {
+        params[key] = value
       }
     }
   } catch {
@@ -79,6 +98,12 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(
       { error: 'empty_body' },
       { status: 400, headers: NO_STORE },
+    )
+  }
+  if (body.length > twilioSmsBodyMaxChars()) {
+    return Response.json(
+      { error: 'body_too_large' },
+      { status: 413, headers: NO_STORE },
     )
   }
 

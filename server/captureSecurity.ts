@@ -122,6 +122,79 @@ export function captureStatusRateLimit(clientKey: string): RateLimitResult {
   return takeRateLimit(`capture-status:${clientKey}`, max, 60_000)
 }
 
+/**
+ * Twilio inbound SMS webhook body cap. Form posts are tiny (SMS ≤1600 chars
+ * plus Twilio metadata); reject mega-bodies before buffering.
+ */
+export const DEFAULT_TWILIO_SMS_MAX_BYTES = 16 * 1024
+
+/** Soft cap on a single `Body` field after parse (concatenated SMS ≤1600). */
+export const DEFAULT_TWILIO_SMS_BODY_CHARS = 2048
+
+export function twilioSmsMaxBytes(): number {
+  return envInt('CAPTURE_TWILIO_SMS_MAX_BYTES', DEFAULT_TWILIO_SMS_MAX_BYTES)
+}
+
+export function twilioSmsBodyMaxChars(): number {
+  return envInt('CAPTURE_TWILIO_SMS_BODY_MAX_CHARS', DEFAULT_TWILIO_SMS_BODY_CHARS)
+}
+
+/** Twilio webhook: default 30 POSTs / minute / client key (before signature). */
+export function twilioSmsRateLimit(clientKey: string): RateLimitResult {
+  const max = envInt('CAPTURE_TWILIO_SMS_RATE_LIMIT_PER_MIN', 30)
+  return takeRateLimit(`capture-twilio-sms:${clientKey}`, max, 60_000)
+}
+
+/**
+ * Read request body as UTF-8 text with a hard byte cap.
+ * Honors Content-Length when present; also aborts mid-stream if the body grows.
+ */
+export async function readRequestTextCapped(
+  request: Request,
+  maxBytes: number,
+): Promise<
+  { ok: true; text: string } | { ok: false; error: 'payload_too_large' }
+> {
+  const contentLength = request.headers.get('content-length')
+  if (contentLength) {
+    const n = Number.parseInt(contentLength, 10)
+    if (Number.isFinite(n) && n > maxBytes) {
+      return { ok: false, error: 'payload_too_large' }
+    }
+  }
+
+  if (!request.body) {
+    return { ok: true, text: '' }
+  }
+
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > maxBytes) {
+      try {
+        await reader.cancel()
+      } catch {
+        /* already cancelled / closed */
+      }
+      return { ok: false, error: 'payload_too_large' }
+    }
+    chunks.push(value)
+  }
+
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return { ok: true, text: new TextDecoder('utf-8').decode(merged) }
+}
+
 export function rateLimitedResponse(result: RateLimitResult): Response {
   return Response.json(
     { error: 'rate_limited' },
