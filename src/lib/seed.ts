@@ -34,6 +34,7 @@ export function createEmptyState(): AppState {
     taskGroups: createSeedTaskGroups(),
     todoTemplates: [],
     dailyTodos: [],
+    moodCheckIns: [],
   }
 }
 
@@ -141,6 +142,7 @@ export function createSeedState(): AppState {
     taskGroups: createSeedTaskGroups(),
     todoTemplates: [],
     dailyTodos: [],
+    moodCheckIns: [],
   }
 }
 

@@ -7,6 +7,7 @@ export type MenuSectionId =
   | 'todos'
   | 'groups'
   | 'agenda'
+  | 'feelings'
   | 'google'
   | 'reminders'
   | 'blink'
