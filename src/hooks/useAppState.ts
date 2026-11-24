@@ -8,6 +8,9 @@ import type {
   EnergyLevel,
   EventCandidate,
   FeelingCategoryId,
+  Goal,
+  GoalPeriod,
+  JournalEntry,
   MoodCheckIn,
   ReminderOffset,
   ReminderStack,
@@ -15,6 +18,8 @@ import type {
   TodoRepeat,
   TodoTemplate,
 } from '../types'
+import { periodKeyFor } from '../lib/goals'
+import { extractKeywords, mergeKeywords } from '../lib/journal'
 import { categoryById, DEFAULT_CATEGORY_ID } from '../lib/taskCategories'
 import { loadState, resetState, saveState } from '../lib/storage'
 import { clearGoogleToken } from '../lib/googleAuth'
@@ -757,6 +762,161 @@ export function useAppState() {
     [flash],
   )
 
+
+  const addGoal = useCallback(
+    (input: {
+      period: GoalPeriod
+      title: string
+      prompt: string
+      taskGroupId?: string
+      targetCount?: number
+    }) => {
+      const title = input.title.trim()
+      if (!title) return
+      const goal: Goal = {
+        id: uid('goal'),
+        period: input.period,
+        title,
+        prompt: input.prompt,
+        taskGroupId: input.taskGroupId,
+        targetCount: input.targetCount,
+        periodKey: periodKeyFor(input.period),
+        createdAt: new Date().toISOString(),
+      }
+      setState((s) => ({
+        ...s,
+        goals: [...(s.goals ?? []), goal],
+      }))
+      flash(`Goal set · ${input.period}`)
+    },
+    [flash],
+  )
+
+  const archiveGoal = useCallback(
+    (goalId: string) => {
+      setState((s) => ({
+        ...s,
+        goals: (s.goals ?? []).map((g) =>
+          g.id === goalId ? { ...g, archived: true } : g,
+        ),
+      }))
+      flash('Goal tucked away')
+    },
+    [flash],
+  )
+
+  const addJournalEntry = useCallback(
+    (input: {
+      body: string
+      date?: string
+      goalId?: string
+      prompt?: string
+      feelingCategory?: string
+      feeling?: string
+      feelingId?: string
+      energy?: number
+      keywords?: string[]
+    }) => {
+      const body = input.body.trim()
+      if (!body) return
+      const now = new Date().toISOString()
+      const date = input.date ?? dayKey()
+      const keywords = mergeKeywords(
+        extractKeywords(body),
+        input.keywords ?? [],
+      )
+      const entry: JournalEntry = {
+        id: uid('jnl'),
+        date,
+        body,
+        goalId: input.goalId,
+        prompt: input.prompt,
+        feelingCategory: input.feelingCategory,
+        feeling: input.feeling,
+        keywords,
+        energy: input.energy,
+        createdAt: now,
+      }
+
+      setState((s) => {
+        let moodCheckIns = s.moodCheckIns ?? []
+        if (
+          input.feeling &&
+          input.feelingCategory &&
+          input.energy != null &&
+          [1, 2, 3, 4, 5].includes(input.energy)
+        ) {
+          const categoryId = input.feelingCategory as FeelingCategoryId
+          const checkIn: MoodCheckIn = {
+            id: uid('mood'),
+            date,
+            categoryId,
+            feelingId: input.feelingId ?? input.feeling.toLowerCase().replace(/\s+/g, '-'),
+            feelingLabel: input.feeling,
+            energy: input.energy as EnergyLevel,
+            createdAt: now,
+          }
+          moodCheckIns = [...moodCheckIns, checkIn]
+        }
+        return {
+          ...s,
+          journalEntries: [...(s.journalEntries ?? []), entry],
+          moodCheckIns,
+          pet: {
+            ...s.pet,
+            eventsScheduled: s.pet.eventsScheduled + 1,
+            lastReactedAt: now,
+          },
+        }
+      })
+      flash(
+        input.feeling
+          ? 'Journal + feeling logged · Blink noticed'
+          : 'Journal saved · Blink noticed',
+      )
+    },
+    [flash],
+  )
+
+  const removeJournalEntry = useCallback(
+    (entryId: string) => {
+      setState((s) => ({
+        ...s,
+        journalEntries: (s.journalEntries ?? []).filter((e) => e.id !== entryId),
+      }))
+      flash('Entry removed')
+    },
+    [flash],
+  )
+
+  const toggleEventComplete = useCallback((eventId: string) => {
+    setState((s) => {
+      const event = s.events.find((e) => e.id === eventId)
+      if (!event) return s
+      const completing = !event.completedAt
+      return {
+        ...s,
+        events: s.events.map((e) =>
+          e.id === eventId
+            ? {
+                ...e,
+                completedAt: completing
+                  ? new Date().toISOString()
+                  : undefined,
+              }
+            : e,
+        ),
+        pet: completing
+          ? {
+              ...s.pet,
+              eventsScheduled: s.pet.eventsScheduled + 1,
+              lastReactedAt: new Date().toISOString(),
+            }
+          : s.pet,
+      }
+    })
+  }, [])
+
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
     [state.candidates],
@@ -801,5 +961,10 @@ export function useAppState() {
     pullGroupItemToDaily,
     pullGroupItemToCalendar,
     addMoodCheckIn,
+    addGoal,
+    archiveGoal,
+    addJournalEntry,
+    removeJournalEntry,
+    toggleEventComplete,
   }
 }

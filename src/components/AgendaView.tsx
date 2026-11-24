@@ -32,6 +32,7 @@ type Props = {
   onToggle: (todoId: string) => void
   onRemove: (todoId: string) => void
   onSetRepeat: (todoId: string, repeat: TodoRepeat) => void
+  onToggleEventComplete?: (eventId: string) => void
 }
 
 export function AgendaView({
@@ -42,6 +43,7 @@ export function AgendaView({
   onToggle,
   onRemove,
   onSetRepeat,
+  onToggleEventComplete,
 }: Props) {
   const [selectedKey, setSelectedKey] = useState(dayKey())
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()))
@@ -84,12 +86,32 @@ export function AgendaView({
         {dayEvents.length > 0 && (
           <ul className="agenda-events">
             {dayEvents.map((ev) => (
-              <li key={ev.id} className="agenda-event-row">
-                <span
-                  className="agenda-event-dot"
-                  style={{ background: ev.color }}
-                  aria-hidden
-                />
+              <li
+                key={ev.id}
+                className={`agenda-event-row${ev.completedAt ? ' is-done' : ''}`}
+              >
+                {onToggleEventComplete ? (
+                  <button
+                    type="button"
+                    className="agenda-event-check"
+                    aria-pressed={Boolean(ev.completedAt)}
+                    aria-label={
+                      ev.completedAt
+                        ? `Mark ${ev.title} incomplete`
+                        : `Mark ${ev.title} complete`
+                    }
+                    style={{ borderColor: ev.color, color: ev.color }}
+                    onClick={() => onToggleEventComplete(ev.id)}
+                  >
+                    {ev.completedAt ? '✓' : ''}
+                  </button>
+                ) : (
+                  <span
+                    className="agenda-event-dot"
+                    style={{ background: ev.color }}
+                    aria-hidden
+                  />
+                )}
                 <span className="agenda-event-time">
                   {safeFormatIso(ev.start, 'h:mm a')}
                 </span>
