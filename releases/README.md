@@ -9,10 +9,10 @@ https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug
 
 | | |
 |---|---|
-| Built from | shared `android/keystore/lumina-debug.keystore` |
+| Built from | Cap debug keystore (local/agent only; not in web package) |
 | versionCode | `4` (`1.1.2-debug`) |
 | SHA-256 | `c852cc612589a0991a6f4f140e2bdf0bee04bf5e4691441faee83b7101e3e44f` |
 
-Rebuild locally with `npm run android:debug` (runs `android:ensure-wrapper`, then Cap sync + `assembleDebug`; APK under `android/app/build/outputs/apk/`). Debug builds must use the project keystore in `android/keystore/` so in-app updates can upgrade in place.
+Rebuild locally with `npm run android:debug` (wrapper + optional keystore restore + Cap sync + `assembleDebug`). Keep the debug keystore and passwords in gitignored `android/local.properties` — never commit them.
 
 When publishing a new APK: bump `versionCode` in `android/app/build.gradle`, put `versionCode: N` in the GitHub Release body, update `public/android-latest.json`, and republish the web app so in-app update check sees it (`docs/android-in-app-updates.md`).

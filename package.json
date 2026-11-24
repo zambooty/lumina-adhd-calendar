@@ -13,7 +13,8 @@
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
     "android:ensure-wrapper": "node scripts/ensure-gradle-wrapper.mjs",
-    "android:debug": "npm run android:ensure-wrapper && npm run cap:sync && cd android && ./gradlew assembleDebug"
+    "android:ensure-debug-keystore": "node scripts/ensure-debug-keystore.mjs",
+    "android:debug": "npm run android:ensure-wrapper && npm run android:ensure-debug-keystore && npm run cap:sync && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",

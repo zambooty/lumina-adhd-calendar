@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+// Optional Cap debug signing — credentials live only in gitignored
+// android/local.properties (never commit passwords or the keystore file).
+def luminaLocalProps = new Properties()
+def luminaLocalFile = rootProject.file('local.properties')
+if (luminaLocalFile.exists()) {
+    luminaLocalFile.withInputStream { luminaLocalProps.load(it) }
+}
+def luminaDebugStoreRel = luminaLocalProps.getProperty('lumina.debug.storeFile', 'keystore/lumina-debug.keystore')
+def luminaDebugStoreFile = rootProject.file(luminaDebugStoreRel)
+def luminaDebugStorePassword = luminaLocalProps.getProperty('lumina.debug.storePassword', '')
+def luminaDebugKeyAlias = luminaLocalProps.getProperty('lumina.debug.keyAlias', '')
+def luminaDebugKeyPassword = luminaLocalProps.getProperty('lumina.debug.keyPassword', '')
+def luminaHasDebugSigning =
+    luminaDebugStoreFile.isFile() &&
+    luminaDebugStorePassword &&
+    luminaDebugKeyAlias &&
+    luminaDebugKeyPassword
+
 android {
     namespace = "com.makesoft.lumina"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -17,19 +35,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Shared debug keystore so Cap in-app updates can upgrade in place across CI/agent builds.
-    // (Default ~/.android/debug.keystore is machine-local and causes "package conflicts".)
-    signingConfigs {
-        debug {
-            storeFile file('../keystore/lumina-debug.keystore')
-            storePassword 'android'
-            keyAlias 'lumina-debug'
-            keyPassword 'android'
+    if (luminaHasDebugSigning) {
+        signingConfigs {
+            debug {
+                storeFile luminaDebugStoreFile
+                storePassword luminaDebugStorePassword
+                keyAlias luminaDebugKeyAlias
+                keyPassword luminaDebugKeyPassword
+            }
         }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            if (luminaHasDebugSigning) {
+                signingConfig signingConfigs.debug
+            }
         }
         release {
             minifyEnabled false
