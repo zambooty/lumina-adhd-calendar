@@ -24,14 +24,14 @@ Without Google secrets, Calendar + Gmail run in **demo mode** (sample appointmen
 
 ### Download debug APK
 
-**[Download `lumina-debug.apk`](https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.3/lumina-debug.apk)** — sideloadable debug build with in-app GitHub updates (release [`android-debug-2026-11-24-1.1.3`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.3)).
+**[Download `lumina-debug.apk`](https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.4/lumina-debug.apk)** — sideloadable debug build with in-app GitHub updates (release [`android-debug-2026-11-24-1.1.4`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.4)).
 
 | | |
 |---|---|
 | Size | ~4.3 MB |
-| SHA-256 | `65becce3efabd3c50e5b0afacfd387dfb8bc56fd8b02dec2d76de15b67742bcb` |
-| Built from | `main` (stable Cap debug signing) |
-| versionCode | `5` (`1.1.3-debug`) |
+| SHA-256 | `fea502e34693492680807fbdc84011a7be417a6c5d5dee84692510c1e8c20cb5` |
+| Built from | `main` (Phase 4 widgets + ADHD polish; stable Cap debug signing) |
+| versionCode | `6` (`1.1.4-debug`) |
 | App ID | `com.makesoft.lumina` |
 
 If install says **package conflicts**, uninstall LUMINA once, then install this APK (one-time signing change). Later Cap updates should install in place.

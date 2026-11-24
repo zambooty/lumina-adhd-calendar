@@ -38,8 +38,8 @@ Do not embed a PAT inside the APK.
 
 ## Debug sideload (current path)
 
-- Works with the usual **debug-signed** APK from `npm run android:debug` (Android SDK default `~/.android/debug.keystore` — no keystore in the repo).
-- In-place upgrade requires the **same** signing certificate as the installed app. Different machines use different default debug keys → “package conflicts” means uninstall once, then install the new APK.
+- Works with a **debug-signed** APK from `npm run android:debug`. Optional shared Cap keystore via gitignored `android/local.properties` (same cert across agent builds); otherwise Android SDK default `~/.android/debug.keystore`.
+- In-place upgrade requires the **same** signing certificate as the installed app. Different default debug keys → “package conflicts” means uninstall once, then install the new APK.
 - Do **not** commit a custom keystore or put `storePassword` / `keyPassword` in tracked Gradle files (blocked by Cursor publish security review).
 - Tag pattern: `android-debug-*` with asset `lumina-debug.apk`.
 
@@ -56,8 +56,8 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 
 ## Current debug build (shipped)
 
-- Release: [`android-debug-2026-11-24-1.1.3`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.3)
-- `versionCode` **5** / `1.1.3-debug`
+- Release: [`android-debug-2026-11-24-1.1.4`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.4)
+- `versionCode` **6** / `1.1.4-debug`
 - Manifest: `public/android-latest.json` (keep in sync on every publish)
 - If Android reports **package conflicts**, uninstall once, then install the latest APK.
 
