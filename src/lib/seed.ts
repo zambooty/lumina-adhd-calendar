@@ -1,6 +1,7 @@
 import { addDays, addHours, setHours, setMinutes } from 'date-fns'
 import type { AppState, CalendarEvent, EventCandidate } from '../types'
 import { uid } from './id'
+import { createDefaultPetStore } from './petStore'
 import { createDefaultStacks } from './reminders'
 import { createSeedTaskGroups } from './taskGroups'
 
@@ -27,6 +28,7 @@ export function createEmptyState(): AppState {
       eventsPulled: 0,
       eventsScheduled: 0,
     },
+    petStore: createDefaultPetStore(),
     autoAddHighConfidence: true,
     hasSeenHero: false,
     seededAt: now,
@@ -137,6 +139,7 @@ export function createSeedState(): AppState {
       eventsPulled: 2,
       eventsScheduled: 1,
     },
+    petStore: createDefaultPetStore(),
     autoAddHighConfidence: true,
     hasSeenHero: false,
     seededAt: now,

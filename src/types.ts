@@ -73,6 +73,34 @@ export type PetState = {
   lastReactedAt?: string
 }
 
+/** Shop categories for companion cosmetics + pet-for-pet. */
+export type PetStoreItemKind =
+  | 'animal'
+  | 'skin'
+  | 'clothes'
+  | 'color'
+  | 'companion'
+
+export type PetEquipped = {
+  animalId: string
+  skinId: string
+  clothesId: string
+  colorId: string
+  companionId: string
+}
+
+/** Currency + owned/equipped cosmetics (persisted with app state). */
+export type PetStoreState = {
+  /** Soft currency earned from ADHD-friendly actions. */
+  spark: number
+  ownedItemIds: string[]
+  equipped: PetEquipped
+  /** Last catalog version the user was prompted about. */
+  seenCatalogVersion: number
+  /** Item ids already shown in a “new unlock” prompt. */
+  promptedItemIds: string[]
+}
+
 /** How often a daily todo / template should reappear. */
 export type TodoRepeat = 'none' | 'daily' | 'weekdays' | 'weekly'
 
@@ -188,6 +216,8 @@ export type AppState = {
   defaultStackId: string
   stacks: ReminderStack[]
   pet: PetState
+  /** Spark currency + cosmetics store (Phase 4). */
+  petStore: PetStoreState
   autoAddHighConfidence: boolean
   hasSeenHero: boolean
   seededAt: string

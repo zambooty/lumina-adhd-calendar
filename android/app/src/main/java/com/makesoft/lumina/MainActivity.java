@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeCapturePlugin.class);
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(WidgetSyncPlugin.class);
         super.onCreate(savedInstanceState);
         handleShareIntent(getIntent());
     }

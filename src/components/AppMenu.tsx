@@ -14,6 +14,7 @@ export type MenuSectionId =
   | 'google'
   | 'reminders'
   | 'blink'
+  | 'store'
 
 type Section = {
   id: MenuSectionId

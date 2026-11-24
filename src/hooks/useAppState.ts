@@ -46,6 +46,17 @@ import {
   parseDayKey,
 } from '../lib/dailyTodos'
 import { checkInDayKey } from '../lib/feelings'
+import {
+  SPARK_REWARDS,
+  addSpark,
+  buyStoreItem,
+  ensurePetStore,
+  equipStoreItem,
+  markItemsPrompted,
+  newlyAvailableItems,
+} from '../lib/petStore'
+import { petXp } from '../lib/pet'
+import { syncHomeWidgets } from '../lib/widgetSync'
 
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState())
@@ -56,6 +67,11 @@ export function useAppState() {
 
   useEffect(() => {
     saveState(state)
+  }, [state])
+
+  // Keep Android home-screen widgets in sync with pet + agenda.
+  useEffect(() => {
+    void syncHomeWidgets(state)
   }, [state])
 
   // Materialize repeating templates for today (and keep list fresh across midnight).
@@ -141,9 +157,13 @@ export function useAppState() {
             ...s.pet,
             eventsScheduled: s.pet.eventsScheduled + 1,
           },
+          petStore: addSpark(
+            ensurePetStore(s.petStore),
+            SPARK_REWARDS.schedule,
+          ),
         }
       })
-      flash('Scheduled · auto reminders on')
+      flash('Scheduled · auto reminders on · +spark')
       if (scheduled) {
         void scheduleEventNotifications(scheduled, stacksSnap)
       }
@@ -241,6 +261,10 @@ export function useAppState() {
             eventsPulled: s.pet.eventsPulled + fresh.length,
             eventsScheduled: s.pet.eventsScheduled + scheduled,
           },
+          petStore: addSpark(
+            ensurePetStore(s.petStore),
+            SPARK_REWARDS.pullBatch + scheduled * SPARK_REWARDS.schedule,
+          ),
         }
       })
 
@@ -476,6 +500,7 @@ export function useAppState() {
     setState((s) => ({
       ...s,
       pet: { ...s.pet, lastReactedAt: new Date().toISOString() },
+      petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.react),
     }))
   }, [])
 
@@ -573,28 +598,32 @@ export function useAppState() {
   )
 
   const toggleDailyTodo = useCallback((todoId: string) => {
-    setState((s) => ({
-      ...s,
-      dailyTodos: (s.dailyTodos ?? []).map((t) => {
-        if (t.id !== todoId) return t
-        const done = !t.done
-        return {
-          ...t,
-          done,
-          doneAt: done ? new Date().toISOString() : undefined,
-        }
-      }),
-      pet: (() => {
-        const t = (s.dailyTodos ?? []).find((x) => x.id === todoId)
-        if (!t || t.done) return s.pet
-        // Completing (not un-completing) nudges pet XP via scheduled counter lightly
-        return {
-          ...s.pet,
-          eventsScheduled: s.pet.eventsScheduled + 1,
-          lastReactedAt: new Date().toISOString(),
-        }
-      })(),
-    }))
+    setState((s) => {
+      const t = (s.dailyTodos ?? []).find((x) => x.id === todoId)
+      const completing = Boolean(t && !t.done)
+      return {
+        ...s,
+        dailyTodos: (s.dailyTodos ?? []).map((row) => {
+          if (row.id !== todoId) return row
+          const done = !row.done
+          return {
+            ...row,
+            done,
+            doneAt: done ? new Date().toISOString() : undefined,
+          }
+        }),
+        pet: completing
+          ? {
+              ...s.pet,
+              eventsScheduled: s.pet.eventsScheduled + 1,
+              lastReactedAt: new Date().toISOString(),
+            }
+          : s.pet,
+        petStore: completing
+          ? addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.completeTodo)
+          : ensurePetStore(s.petStore),
+      }
+    })
   }, [])
 
   const removeDailyTodo = useCallback((todoId: string) => {
@@ -756,8 +785,9 @@ export function useAppState() {
           eventsScheduled: s.pet.eventsScheduled + 1,
           lastReactedAt: new Date().toISOString(),
         },
+        petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.mood),
       }))
-      flash(`Feeling logged · ${input.feelingLabel}`)
+      flash(`Feeling logged · ${input.feelingLabel} · +spark`)
     },
     [flash],
   )
@@ -867,12 +897,13 @@ export function useAppState() {
             eventsScheduled: s.pet.eventsScheduled + 1,
             lastReactedAt: now,
           },
+          petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.journal),
         }
       })
       flash(
         input.feeling
-          ? 'Journal + feeling logged · Blink noticed'
-          : 'Journal saved · Blink noticed',
+          ? 'Journal + feeling logged · Blink noticed · +spark'
+          : 'Journal saved · Blink noticed · +spark',
       )
     },
     [flash],
@@ -913,6 +944,61 @@ export function useAppState() {
               lastReactedAt: new Date().toISOString(),
             }
           : s.pet,
+        petStore: completing
+          ? addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.completeEvent)
+          : ensurePetStore(s.petStore),
+      }
+    })
+  }, [])
+
+  const buyPetStoreItem = useCallback(
+    (itemId: string) => {
+      let msg = 'Could not buy'
+      setState((s) => {
+        const store = ensurePetStore(s.petStore)
+        const result = buyStoreItem(store, itemId, petXp(s.pet))
+        if (!result.ok) {
+          msg =
+            result.reason === 'broke'
+              ? 'Not enough spark'
+              : result.reason === 'locked'
+                ? 'Grow Blink to unlock'
+                : result.reason === 'owned'
+                  ? 'Already owned'
+                  : 'Item missing'
+          return s
+        }
+        msg = 'Purchased · equipped look ready'
+        const equipped = equipStoreItem(result.store, itemId) ?? result.store
+        return { ...s, petStore: equipped }
+      })
+      flash(msg)
+    },
+    [flash],
+  )
+
+  const equipPetStoreItem = useCallback(
+    (itemId: string) => {
+      setState((s) => {
+        const next = equipStoreItem(ensurePetStore(s.petStore), itemId)
+        if (!next) return s
+        return { ...s, petStore: next }
+      })
+      flash('Look equipped')
+    },
+    [flash],
+  )
+
+  const dismissPetStorePrompts = useCallback(() => {
+    setState((s) => {
+      const store = ensurePetStore(s.petStore)
+      const fresh = newlyAvailableItems(store, petXp(s.pet))
+      return {
+        ...s,
+        petStore: markItemsPrompted(
+          store,
+          fresh.map((i) => i.id),
+        ),
       }
     })
   }, [])
@@ -966,5 +1052,8 @@ export function useAppState() {
     addJournalEntry,
     removeJournalEntry,
     toggleEventComplete,
+    buyPetStoreItem,
+    equipPetStoreItem,
+    dismissPetStorePrompts,
   }
 }
