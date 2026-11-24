@@ -473,6 +473,7 @@ export default function App() {
         children: (
           <CompanionPet
             pet={state.pet}
+            store={petStore}
             onReact={petReact}
             onSpeak={petSpeak}
             onOpenScreen={openPetScreen}
@@ -741,6 +742,7 @@ export default function App() {
 
       <FloatingPetButton
         pet={state.pet}
+        store={petStore}
         onOpen={openPetScreen}
         hidden={
           menuOpen ||
@@ -755,6 +757,7 @@ export default function App() {
       <PetScreen
         open={petScreenOpen}
         pet={state.pet}
+        store={petStore}
         onClose={closePetScreen}
         onReact={petReact}
         onSpeak={petSpeak}
