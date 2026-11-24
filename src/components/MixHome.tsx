@@ -158,7 +158,7 @@ export function MixHome({
         <section className="mix-glass mix-upcoming" aria-label="Upcoming">
           <div className="mix-upcoming-head">
             <h2 className="mix-rail-title">Upcoming</h2>
-            <p className="mix-rail-hint">What&apos;s next — stacks included.</p>
+            <p className="mix-rail-hint">What&apos;s next — reminders included.</p>
           </div>
           <div className="mix-upcoming-body">
             <UpcomingList

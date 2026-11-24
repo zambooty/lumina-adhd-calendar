@@ -105,7 +105,7 @@ export function useAppState() {
           },
         }
       })
-      flash('Scheduled · reminder stack attached')
+      flash('Scheduled · auto reminders on')
       if (scheduled) {
         void scheduleEventNotifications(scheduled, stacksSnap)
       }

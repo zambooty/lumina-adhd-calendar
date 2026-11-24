@@ -786,7 +786,7 @@ function DetailSheet({
                 className="event-meta"
                 htmlFor={`sheet-stack-${selectedEvent.id}`}
               >
-                Reminder stack
+                Auto reminders
               </label>
               <select
                 id={`sheet-stack-${selectedEvent.id}`}
@@ -811,7 +811,9 @@ function DetailSheet({
                       /leave/i.test(o.label) ? ' stack-pill--leave' : ''
                     }`}
                   >
-                    {formatOffset(o.minutesBefore)} · {o.label}
+                    {/leave/i.test(o.label)
+                      ? `Leave · ${formatOffset(o.minutesBefore)}`
+                      : `${formatOffset(o.minutesBefore)} before`}
                   </span>
                 ))}
               </div>

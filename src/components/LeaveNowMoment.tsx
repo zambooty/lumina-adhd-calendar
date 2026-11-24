@@ -63,7 +63,7 @@ export function LeaveNowMoment({
               </h2>
               <p className="leave-moment-meta">
                 {safeFormatIso(event.start, 'h:mm')} appointment · travel
-                buffer hit. Open Lumina for the full stack.
+                buffer hit. Open Lumina for the full reminder set.
               </p>
               <div className="leave-moment-pills">
                 {offsets.slice(0, 4).map((o) => (

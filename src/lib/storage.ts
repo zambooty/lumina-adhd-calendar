@@ -1,10 +1,15 @@
-import type { AppState } from '../types'
+import type { AppState, ReminderStack } from '../types'
+import { AUTO_REMINDER_PRESETS } from './reminders'
 import { createEmptyState } from './seed'
 import { dismissKeysFor, rememberDismissed } from './pullFilter'
 
 /** v2 drops auto-seeded demo appointments so live Google tests start clean. */
 const KEY = 'lumen_adhd_companion_v2'
 const LEGACY_KEYS = ['lumen_adhd_companion_v1']
+
+const PRESET_NAMES = Object.fromEntries(
+  AUTO_REMINDER_PRESETS.map((p) => [p.id, p.label]),
+) as Record<string, string>
 
 function wipeLegacyKeys(): void {
   for (const key of LEGACY_KEYS) {
@@ -16,6 +21,13 @@ function wipeLegacyKeys(): void {
   }
 }
 
+function friendlyStacks(stacks: ReminderStack[] | undefined): ReminderStack[] {
+  return (stacks ?? []).map((s) => {
+    const name = PRESET_NAMES[s.id]
+    return name && s.name !== name ? { ...s, name } : s
+  })
+}
+
 function normalizeState(raw: AppState): AppState {
   const fromStatus = (raw.candidates ?? [])
     .filter((c) => c.status === 'dismissed')
@@ -23,6 +35,7 @@ function normalizeState(raw: AppState): AppState {
 
   return {
     ...raw,
+    stacks: friendlyStacks(raw.stacks),
     dismissedKeys: rememberDismissed(
       Array.isArray(raw.dismissedKeys) ? raw.dismissedKeys : [],
       fromStatus,
