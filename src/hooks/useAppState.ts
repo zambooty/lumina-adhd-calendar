@@ -55,7 +55,7 @@ import {
   markItemsPrompted,
   newlyAvailableItems,
 } from '../lib/petStore'
-import { petXp } from '../lib/pet'
+import { bumpPetGrowth, petXp } from '../lib/pet'
 import { syncHomeWidgets } from '../lib/widgetSync'
 
 export function useAppState() {
@@ -153,10 +153,7 @@ export function useAppState() {
           candidates: s.candidates.map((c) =>
             c.id === candidateId ? { ...c, status: 'scheduled' as const } : c,
           ),
-          pet: {
-            ...s.pet,
-            eventsScheduled: s.pet.eventsScheduled + 1,
-          },
+          pet: bumpPetGrowth(s.pet, 'schedule'),
           petStore: addSpark(
             ensurePetStore(s.petStore),
             SPARK_REWARDS.schedule,
@@ -256,11 +253,12 @@ export function useAppState() {
           dismissedKeys: s.dismissedKeys ?? [],
           candidates: nextCandidates,
           events: nextEvents,
-          pet: {
-            ...s.pet,
-            eventsPulled: s.pet.eventsPulled + fresh.length,
-            eventsScheduled: s.pet.eventsScheduled + scheduled,
-          },
+          pet: (() => {
+            let pet = s.pet
+            if (fresh.length) pet = bumpPetGrowth(pet, 'pull', fresh.length)
+            if (scheduled) pet = bumpPetGrowth(pet, 'schedule', scheduled)
+            return pet
+          })(),
           petStore: addSpark(
             ensurePetStore(s.petStore),
             SPARK_REWARDS.pullBatch + scheduled * SPARK_REWARDS.schedule,
@@ -454,10 +452,8 @@ export function useAppState() {
           events: [...s.events, event].sort(
             (a, b) => +new Date(a.start) - +new Date(b.start),
           ),
-          pet: {
-            ...s.pet,
-            eventsScheduled: s.pet.eventsScheduled + 1,
-          },
+          pet: bumpPetGrowth(s.pet, 'schedule'),
+          petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.schedule),
         }
       })
       flash(
@@ -612,13 +608,7 @@ export function useAppState() {
             doneAt: done ? new Date().toISOString() : undefined,
           }
         }),
-        pet: completing
-          ? {
-              ...s.pet,
-              eventsScheduled: s.pet.eventsScheduled + 1,
-              lastReactedAt: new Date().toISOString(),
-            }
-          : s.pet,
+        pet: completing ? bumpPetGrowth(s.pet, 'task') : s.pet,
         petStore: completing
           ? addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.completeTodo)
           : ensurePetStore(s.petStore),
@@ -747,10 +737,8 @@ export function useAppState() {
           events: [...s.events, event].sort(
             (a, b) => +new Date(a.start) - +new Date(b.start),
           ),
-          pet: {
-            ...s.pet,
-            eventsScheduled: s.pet.eventsScheduled + 1,
-          },
+          pet: bumpPetGrowth(s.pet, 'schedule'),
+          petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.schedule),
         }
       })
       flash(`On calendar · ${item.title}`)
@@ -780,14 +768,10 @@ export function useAppState() {
       setState((s) => ({
         ...s,
         moodCheckIns: [...(s.moodCheckIns ?? []), entry],
-        pet: {
-          ...s.pet,
-          eventsScheduled: s.pet.eventsScheduled + 1,
-          lastReactedAt: new Date().toISOString(),
-        },
+        pet: bumpPetGrowth(s.pet, 'mood'),
         petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.mood),
       }))
-      flash(`Feeling logged · ${input.feelingLabel} · +spark`)
+      flash(`Feeling logged · ${input.feelingLabel} · Blink noticed · +spark`)
     },
     [flash],
   )
@@ -888,16 +872,22 @@ export function useAppState() {
           }
           moodCheckIns = [...moodCheckIns, checkIn]
         }
+        let pet = bumpPetGrowth(s.pet, 'journal')
+        if (moodCheckIns.length > (s.moodCheckIns ?? []).length) {
+          pet = bumpPetGrowth(pet, 'mood')
+        }
         return {
           ...s,
           journalEntries: [...(s.journalEntries ?? []), entry],
           moodCheckIns,
-          pet: {
-            ...s.pet,
-            eventsScheduled: s.pet.eventsScheduled + 1,
-            lastReactedAt: now,
-          },
-          petStore: addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.journal),
+          pet,
+          petStore: addSpark(
+            ensurePetStore(s.petStore),
+            SPARK_REWARDS.journal +
+              (moodCheckIns.length > (s.moodCheckIns ?? []).length
+                ? SPARK_REWARDS.mood
+                : 0),
+          ),
         }
       })
       flash(
@@ -937,13 +927,7 @@ export function useAppState() {
               }
             : e,
         ),
-        pet: completing
-          ? {
-              ...s.pet,
-              eventsScheduled: s.pet.eventsScheduled + 1,
-              lastReactedAt: new Date().toISOString(),
-            }
-          : s.pet,
+        pet: completing ? bumpPetGrowth(s.pet, 'task') : s.pet,
         petStore: completing
           ? addSpark(ensurePetStore(s.petStore), SPARK_REWARDS.completeEvent)
           : ensurePetStore(s.petStore),
@@ -1003,6 +987,18 @@ export function useAppState() {
     })
   }, [])
 
+  const petSpeak = useCallback((line: string) => {
+    setState((s) => ({
+      ...s,
+      pet: {
+        ...s.pet,
+        lastSpeech: line,
+        lastSpokeAt: new Date().toISOString(),
+        lastReactedAt: new Date().toISOString(),
+      },
+    }))
+  }, [])
+
   const pendingCandidates = useMemo(
     () => state.candidates.filter((c) => c.status === 'pending'),
     [state.candidates],
@@ -1037,6 +1033,7 @@ export function useAppState() {
     setEventOverride,
     toggleAutoAdd,
     petReact,
+    petSpeak,
     hardReset,
     notifyCaptureImported,
     ensureDayTodos,

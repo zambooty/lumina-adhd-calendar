@@ -1,6 +1,7 @@
 import type { AppState, ReminderStack } from '../types'
 import { ensurePetStore } from './petStore'
 import { AUTO_REMINDER_PRESETS } from './reminders'
+import { normalizePet } from './pet'
 import { createEmptyState } from './seed'
 import { dismissKeysFor, rememberDismissed } from './pullFilter'
 import { ensureTaskGroups } from './taskGroups'
@@ -38,6 +39,7 @@ function normalizeState(raw: AppState): AppState {
   return {
     ...raw,
     stacks: friendlyStacks(raw.stacks),
+    pet: normalizePet(raw.pet),
     dismissedKeys: rememberDismissed(
       Array.isArray(raw.dismissedKeys) ? raw.dismissedKeys : [],
       fromStatus,

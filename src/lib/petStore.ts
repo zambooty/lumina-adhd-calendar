@@ -484,6 +484,9 @@ export function petWidgetLine(
     name: petName,
     eventsPulled,
     eventsScheduled,
+    tasksCompleted: 0,
+    journalsLogged: 0,
+    moodsLogged: 0,
   })
   const stage = petStage(xp)
   const preview = equippedPreview(store)

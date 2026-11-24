@@ -281,8 +281,8 @@ export function MixHome({
         <div className="mix-whisper mix-whisper--mobile" aria-live="polite">
           <span className="mix-whisper-orb" aria-hidden />
           <span>
-            Blink glowing · {xp} pull{xp === 1 ? '' : 's'}
-            <span className="mix-whisper-extra"> this week</span>
+            Blink glowing · {xp} XP
+            <span className="mix-whisper-extra"> · tap the floating pet</span>
           </span>
         </div>
       </div>
@@ -291,7 +291,7 @@ export function MixHome({
         <div className="mix-whisper mix-whisper--rail">
           <span className="mix-whisper-orb" aria-hidden />
           <span>
-            Blink glowing · {xp} pull{xp === 1 ? '' : 's'}
+            Blink glowing · {xp} XP
           </span>
         </div>
       </aside>
