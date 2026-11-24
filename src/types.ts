@@ -18,6 +18,9 @@ export type ReminderStack = {
   offsets: ReminderOffset[]
 }
 
+/** Manual day-add kinds (Pull/Google events omit this). */
+export type CalendarEntryKind = 'event' | 'reminder' | 'note'
+
 export type CalendarEvent = {
   id: string
   title: string
@@ -28,6 +31,10 @@ export type CalendarEvent = {
   source?: SourceKind
   sourceLabel?: string
   color: string
+  /** Color category for calendar legend / filtering. */
+  categoryId?: string
+  /** How this row was added from day view (optional). */
+  entryKind?: CalendarEntryKind
   reminderStackId: string
   /** Per-event override; if set, used instead of stack template */
   reminderOverride?: ReminderOffset[]

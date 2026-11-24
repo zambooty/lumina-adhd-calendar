@@ -45,6 +45,8 @@ export default function App() {
     setDefaultStack,
     updateStack,
     setEventStack,
+    setEventCategory,
+    addManualEntry,
     toggleAutoAdd,
     petReact,
     hardReset,
@@ -365,11 +367,14 @@ export default function App() {
           stacks={state.stacks}
           pet={state.pet}
           onChangeStack={setEventStack}
+          onChangeCategory={setEventCategory}
+          onAddEntry={addManualEntry}
           focusEventId={activeFocusId}
           onFocusConsumed={() => {
             setUiFocusEventId(null)
             clearFocusEvent()
           }}
+          onOpenEvent={(id) => setUiFocusEventId(id)}
         />
       </main>
 
