@@ -1,12 +1,12 @@
 {
-  "versionCode": 3,
-  "versionName": "1.1.1-debug",
-  "tag": "android-debug-2026-11-24-1.1.1",
+  "versionCode": 4,
+  "versionName": "1.1.2-debug",
+  "tag": "android-debug-2026-11-24-1.1.2",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.1/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.1",
-  "sha256": "be920aff7794c1dff8c54814650127d697fd9988ab8f677dd44802648265bdd0",
-  "publishedAt": "2026-11-24T15:23:21Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.2/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.2",
+  "sha256": "c852cc612589a0991a6f4f140e2bdf0bee04bf5e4691441faee83b7101e3e44f",
+  "publishedAt": "2026-11-24T15:28:54Z",
   "channel": "debug",
-  "notes": "Android debug 1.1.1 (versionCode 3) — security hardenings + calendar Phase 1. Built from main @ 88e77a2. Public Releases — silent download needs no GITHUB_TOKEN."
+  "notes": "Android debug 1.1.2 (versionCode 4) — shared project debug keystore for in-place Cap updates. If package conflicts, uninstall once then install. Built with stable android/keystore/lumina-debug.keystore."
 }
