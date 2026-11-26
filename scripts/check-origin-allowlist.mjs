@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict'
 import {
   googleCloudConsoleUris,
+  includeLocalDevOrigins,
   isAllowedAppOrigin,
   isAllowedRedirectUri,
   normalizeOrigin,
@@ -143,13 +144,58 @@ assert.equal(
   false,
 )
 
-assert.equal(
-  isAllowedAppOrigin(
-    { origin: 'http://127.0.0.1:5173' },
-    'http://127.0.0.1:5173/api/google/exchange',
-  ),
-  true,
-)
+{
+  const prevNode = process.env.NODE_ENV
+  const prevAllow = process.env.ALLOW_DEV_ORIGINS
+  delete process.env.ALLOW_DEV_ORIGINS
+  process.env.NODE_ENV = 'development'
+  assert.equal(includeLocalDevOrigins(), true)
+  assert.equal(
+    isAllowedAppOrigin(
+      { origin: 'http://127.0.0.1:5173' },
+      'http://127.0.0.1:5173/api/google/exchange',
+    ),
+    true,
+    'local Vite Origin allowed outside production',
+  )
+
+  process.env.NODE_ENV = 'production'
+  assert.equal(includeLocalDevOrigins(), false)
+  assert.equal(
+    isAllowedAppOrigin(
+      { origin: 'http://127.0.0.1:5173' },
+      'http://127.0.0.1:5173/api/google/exchange',
+    ),
+    false,
+    'local Vite Origin rejected on production host by default',
+  )
+  assert.equal(
+    isAllowedAppOrigin({ origin: published }, internalUrl),
+    true,
+    'published Origin still allowed in production',
+  )
+  assert.equal(
+    isAllowedAppOrigin({ origin: 'https://localhost' }, internalUrl),
+    true,
+    'Cap https://localhost still allowed in production',
+  )
+
+  process.env.ALLOW_DEV_ORIGINS = '1'
+  assert.equal(includeLocalDevOrigins(), true)
+  assert.equal(
+    isAllowedAppOrigin(
+      { origin: 'http://127.0.0.1:5173' },
+      'http://127.0.0.1:5173/api/google/exchange',
+    ),
+    true,
+    'ALLOW_DEV_ORIGINS=1 re-enables local Vite on production',
+  )
+
+  if (prevNode === undefined) delete process.env.NODE_ENV
+  else process.env.NODE_ENV = prevNode
+  if (prevAllow === undefined) delete process.env.ALLOW_DEV_ORIGINS
+  else process.env.ALLOW_DEV_ORIGINS = prevAllow
+}
 
 // redirect_uri: allowlisted origin / trailing slash only
 assert.equal(isAllowedRedirectUri(published), true)

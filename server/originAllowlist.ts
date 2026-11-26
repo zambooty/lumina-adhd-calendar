@@ -6,8 +6,9 @@
  * fails → forbidden_origin — including mobile after redirect OAuth.
  *
  * Allow when Origin/Referer matches a *static* known public app origin
- * (published + local Vite + Capacitor + PUBLIC_APP_ORIGIN / ALLOWED_ORIGINS),
- * plus Sec-Fetch-Site: same-origin when Host itself is on that static list.
+ * (published + Capacitor + PUBLIC_APP_ORIGIN / ALLOWED_ORIGINS; local Vite
+ * only outside production or with ALLOW_DEV_ORIGINS), plus Sec-Fetch-Site:
+ * same-origin when Host itself is on that static list.
  *
  * Do NOT expand the allowlist from client-controlled Host / X-Forwarded-*
  * (spoofable on some edges) or from request.url (often an internal host).
@@ -34,6 +35,18 @@ export const CAPACITOR_ORIGINS = [
   'http://localhost',
   'https://localhost',
 ] as const
+
+/**
+ * Local Vite origins are an insecure default on the published host (any
+ * process on the caller's machine could hit production /api/*). Include them
+ * only in non-production, or when ALLOW_DEV_ORIGINS=1 is set explicitly.
+ */
+export function includeLocalDevOrigins(): boolean {
+  const flag = (process.env.ALLOW_DEV_ORIGINS ?? '').trim().toLowerCase()
+  if (flag === '1' || flag === 'true' || flag === 'yes') return true
+  if (flag === '0' || flag === 'false' || flag === 'no') return false
+  return (process.env.NODE_ENV ?? '').trim().toLowerCase() !== 'production'
+}
 
 const TRUSTED_SCHEMES = new Set(['http:', 'https:', 'capacitor:', 'ionic:'])
 
@@ -134,14 +147,17 @@ function addOriginAndAliases(target: Set<string>, origin: string): void {
 
 /**
  * Static public origins we trust for this deployment.
- * Includes published app (+ www), local Vite, Capacitor, and env overrides.
+ * Includes published app (+ www), Capacitor, env overrides, and local Vite
+ * only when includeLocalDevOrigins() says so.
  * Does not include Host / X-Forwarded-* or request.url (spoofable / internal).
  */
 export function staticAllowedOrigins(): Set<string> {
   const allowed = new Set<string>()
 
   addOriginAndAliases(allowed, PUBLISHED_APP_ORIGIN)
-  for (const o of LOCAL_DEV_ORIGINS) addOriginAndAliases(allowed, o)
+  if (includeLocalDevOrigins()) {
+    for (const o of LOCAL_DEV_ORIGINS) addOriginAndAliases(allowed, o)
+  }
   for (const o of CAPACITOR_ORIGINS) {
     const n = normalizeOrigin(o)
     if (n) allowed.add(n)

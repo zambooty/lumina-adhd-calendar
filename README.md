@@ -155,8 +155,10 @@ https://localhost/
 | `GOOGLE_CLIENT_SECRET` | for mobile code exchange / refresh | Server-only secret; never shipped to the client |
 | `PUBLIC_APP_ORIGIN` | optional | Extra allowlisted origin if the published slug changes (e.g. `https://new-slug.apps.grok.bot`) |
 | `ALLOWED_ORIGINS` | optional | Comma-separated extra origins (same allowlist as above) |
-| `GOOGLE_EXCHANGE_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/exchange` attempts per client IP per minute (default `20`) |
-| `GOOGLE_REFRESH_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/refresh` attempts per client IP per minute (default `30`) |
+| `ALLOW_DEV_ORIGINS` | optional | `1` to keep local Vite origins (`127.0.0.1` / `localhost` :5173/:4173) on a production host; default off when `NODE_ENV=production` |
+| `TRUST_PLATFORM_IP_HEADERS` | optional | Comma-separated platform IP headers to trust for rate-limit buckets (e.g. `x-real-ip`). Without this, all callers share one `untrusted-edge` bucket — `X-Forwarded-For` is never used |
+| `GOOGLE_EXCHANGE_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/exchange` attempts per client key per minute (default `20`) |
+| `GOOGLE_REFRESH_RATE_LIMIT_PER_MIN` | optional | Max `/api/google/refresh` attempts per client key per minute (default `30`) |
 
 Server routes (Cursor host + Vite dev middleware — same handlers):
 
@@ -166,10 +168,10 @@ Server routes (Cursor host + Vite dev middleware — same handlers):
 
 Hardening on exchange/refresh:
 
-- **Static origin allowlist** — published app, local Vite, Capacitor (`https://localhost`, `capacitor://localhost`, …), plus `PUBLIC_APP_ORIGIN` / `ALLOWED_ORIGINS`. Missing/invalid Origin (and Referer) is rejected; privacy browsers may pass with `Sec-Fetch-Site: same-origin` when Host is on that same static list. Client-controlled `Host` / `X-Forwarded-*` cannot expand the Origin allowlist.
+- **Static origin allowlist** — published app, Capacitor (`https://localhost`, `capacitor://localhost`, …), plus `PUBLIC_APP_ORIGIN` / `ALLOWED_ORIGINS`. Local Vite origins are included only outside production (or with `ALLOW_DEV_ORIGINS=1`). Missing/invalid Origin (and Referer) is rejected; privacy browsers may pass with `Sec-Fetch-Site: same-origin` when Host is on that same static list. Client-controlled `Host` / `X-Forwarded-*` cannot expand the Origin allowlist.
 - **`redirect_uri` allowlist** — must be an allowlisted origin (or the same with a trailing slash). Paths, query strings, and arbitrary hosts are rejected (`redirect_uri_forbidden`).
 - **Grant type** — server-fixed (`authorization_code` / `refresh_token`); client overrides other than the expected value are rejected.
-- **Rate limits** — per client IP (see env above); `429` + `Retry-After` when exceeded.
+- **Rate limits** — per trusted platform client IP when `TRUST_PLATFORM_IP_HEADERS` is set; otherwise one shared `untrusted-edge` bucket (never spoofable `X-Forwarded-For`); `429` + `Retry-After` when exceeded.
 - **No token leakage** — error bodies only return safe OAuth error codes; success responses only forward expected token fields.
 
 Scopes: `calendar.readonly` + `gmail.readonly`.
@@ -189,7 +191,7 @@ Capacitor uses `server.androidScheme: 'https'` → WebView origin **`https://loc
 1. Add Cap Console URIs above (`https://localhost` + `/`).
 2. Build/install debug APK (`npm run android:debug` or Android Studio).
 3. Grant any OS prompts; tap **Connect Google** — Cap opens Chrome Custom Tabs (`@capacitor/browser`); after consent, Android returns to LUMINA via `https://localhost` intent filter.
-4. If Custom Tabs fail, Cap falls back to in-WebView navigation (`allowNavigation` for Google hosts).
+4. If Custom Tabs fail, Cap falls back to in-WebView navigation (`allowNavigation` for `accounts.google.com` / `*.googleapis.com` only — no `googleusercontent` wildcards).
 
 Escape hatch: `CAP_SERVER_URL=https://lumina-calendar-f5eb.apps.grok.bot npm run cap:sync` loads UI+API remote (OAuth uses the published origin already in Console). Default remains bundled + Cap origins so one Web client covers phone + web.
 

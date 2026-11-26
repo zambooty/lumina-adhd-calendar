@@ -162,7 +162,7 @@ assert.equal(
   assert.equal(unsealRefreshToken(sealed, 'other-secret'), null)
 }
 
-// Rate-limit key: last XFF hop; Origin ignored; platform IP only when opted in
+// Rate-limit key: ignore XFF; Origin ignored; platform IP only when opted in
 {
   const prevTrust = process.env.TRUST_PLATFORM_IP_HEADERS
   delete process.env.TRUST_PLATFORM_IP_HEADERS
@@ -185,6 +185,9 @@ assert.equal(
       origin: published,
     },
   })
+  const noIp = new Request('https://example.com/api', {
+    headers: { origin: published },
+  })
   const spoofedRealIp = new Request('https://example.com/api', {
     headers: {
       'x-real-ip': '10.0.0.9',
@@ -196,10 +199,12 @@ assert.equal(
   const b = clientKeyFromRequest(sameEdgeDifferentOrigin)
   const c = clientKeyFromRequest(alone)
   const d = clientKeyFromRequest(spoofedRealIp)
-  assert.equal(a, b, 'last XFF hop + Origin must not split the bucket')
-  assert.notEqual(a, c, 'different last XFF hop → different key')
+  const e = clientKeyFromRequest(noIp)
+  assert.equal(a, b, 'XFF + Origin must not split the untrusted-edge bucket')
+  assert.equal(a, c, 'different XFF must still share untrusted-edge without opt-in')
+  assert.equal(a, e, 'missing IP headers share the same untrusted-edge bucket')
   assert.equal(
-    c,
+    a,
     d,
     'without TRUST_PLATFORM_IP_HEADERS, spoofed x-real-ip must be ignored',
   )
@@ -207,15 +212,10 @@ assert.equal(
 
   process.env.TRUST_PLATFORM_IP_HEADERS = 'x-real-ip'
   const trusted = clientKeyFromRequest(spoofedRealIp)
-  assert.equal(
-    trusted,
-    a,
-    'opted-in x-real-ip should match last-hop key for that IP',
-  )
   assert.notEqual(
     trusted,
-    c,
-    'opted-in x-real-ip must not follow the spoofable XFF-only key',
+    a,
+    'opted-in x-real-ip must not follow the shared untrusted-edge key',
   )
   assert.equal(
     trusted,
@@ -227,7 +227,16 @@ assert.equal(
         },
       }),
     ),
-    'opted-in x-real-ip buckets by platform IP',
+    'opted-in x-real-ip buckets by platform IP (XFF ignored)',
+  )
+  assert.equal(
+    a,
+    clientKeyFromRequest(
+      new Request('https://example.com/api', {
+        headers: { 'x-forwarded-for': '9.9.9.9, 8.8.8.8' },
+      }),
+    ),
+    'XFF alone still shares untrusted-edge even when platform headers are opted in but absent',
   )
 
   if (prevTrust === undefined) delete process.env.TRUST_PLATFORM_IP_HEADERS
