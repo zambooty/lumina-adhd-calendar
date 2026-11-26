@@ -56,8 +56,8 @@ Play Store later would use Play in-app updates instead of this sideload flow.
 
 ## Current debug build (shipped)
 
-- Release: [`android-debug-2026-11-24-1.1.4`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.4)
-- `versionCode` **6** / `1.1.4-debug`
+- Release: [`android-debug-2026-11-26-1.1.5`](https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-26-1.1.5)
+- `versionCode` **7** / `1.1.5-debug`
 - Manifest: `public/android-latest.json` (keep in sync on every publish)
 - If Android reports **package conflicts**, uninstall once, then install the latest APK.
 
