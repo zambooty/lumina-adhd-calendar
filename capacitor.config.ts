@@ -27,12 +27,14 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     ...(remoteServerUrl ? { url: remoteServerUrl } : {}),
-    // Keep Google OAuth + published API navigations inside the WebView /
-    // Custom Tabs return path instead of dumping to an external browser forever.
+    // In-WebView fallback when Custom Tabs fail. Keep this tight — no
+    // *.google.com / *.googleusercontent.com (UGC / open redirect surface).
+    // Prefer @capacitor/browser Custom Tabs for the real OAuth path.
     allowNavigation: [
       'accounts.google.com',
-      '*.google.com',
-      '*.googleusercontent.com',
+      'www.google.com',
+      'google.com',
+      '*.googleapis.com',
       new URL(PUBLISHED_APP_ORIGIN).hostname,
     ],
   },

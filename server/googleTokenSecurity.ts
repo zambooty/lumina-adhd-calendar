@@ -69,7 +69,8 @@ export function refreshRateLimit(clientKey: string): RateLimitResult {
 /**
  * Headers that may identify the client IP — only consulted when the deployment
  * explicitly opts in via TRUST_PLATFORM_IP_HEADERS (comma-separated names).
- * Without that env, clients can spoof these on edges that do not strip them.
+ * Without that env, clients can spoof X-Forwarded-For / X-Real-IP on edges
+ * that do not strip them, minting a fresh rate-limit bucket per spoofed IP.
  */
 const PLATFORM_IP_HEADER_CANDIDATES = [
   'x-real-ip',
@@ -78,8 +79,8 @@ const PLATFORM_IP_HEADER_CANDIDATES = [
 ] as const
 
 /**
- * Names the platform is known to set (lower-case). Empty = trust none of the
- * single-IP platform headers; fall back to last X-Forwarded-For hop only.
+ * Names the platform is known to set (lower-case). Empty = trust no
+ * client-IP headers at all; share one untrusted-edge rate-limit bucket.
  *
  * Example: TRUST_PLATFORM_IP_HEADERS=x-real-ip,cf-connecting-ip
  */
@@ -106,28 +107,18 @@ function platformClientIp(request: Request): string {
 }
 
 /**
- * Rate-limit client key that resists header spoofing as much as a single
- * process can without a trusted-proxy hop count.
+ * Rate-limit client key that resists header spoofing.
  *
  * Only trust named platform IP headers when TRUST_PLATFORM_IP_HEADERS lists
- * them (edge must strip client copies). Otherwise use the *last*
- * X-Forwarded-For hop (edge-appended). Do **not** mix Origin into the key —
- * callers control Origin and could mint a fresh bucket per value.
+ * them (edge must strip client copies). Never use X-Forwarded-For — callers
+ * can forge hops and exhaust per-IP buckets. Without a trusted platform IP,
+ * every request shares the `untrusted-edge` bucket. Do **not** mix Origin
+ * into the key — callers control Origin and could mint a fresh bucket per
+ * value.
  */
 export function clientKeyFromRequest(request: Request): string {
-  let ip = platformClientIp(request)
-  if (!ip) {
-    const xf = request.headers.get('x-forwarded-for')
-    if (xf) {
-      const hops = xf
-        .split(',')
-        .map((h) => h.trim())
-        .filter(Boolean)
-      const last = hops[hops.length - 1]
-      if (last) ip = last.slice(0, 128)
-    }
-  }
-  const material = ip || 'unknown'
+  const ip = platformClientIp(request)
+  const material = ip || 'untrusted-edge'
   return createHash('sha256')
     .update(`${RATE_LIMIT_SALT}|${material}`)
     .digest('hex')
