@@ -1,12 +1,12 @@
 {
-  "versionCode": 6,
-  "versionName": "1.1.4-debug",
-  "tag": "android-debug-2026-11-24-1.1.4",
+  "versionCode": 7,
+  "versionName": "1.1.5-debug",
+  "tag": "android-debug-2026-11-26-1.1.5",
   "apkAsset": "lumina-debug.apk",
-  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-24-1.1.4/lumina-debug.apk",
-  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-24-1.1.4",
-  "sha256": "fea502e34693492680807fbdc84011a7be417a6c5d5dee84692510c1e8c20cb5",
-  "publishedAt": "2026-11-24T18:17:00Z",
+  "githubDownloadUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/download/android-debug-2026-11-26-1.1.5/lumina-debug.apk",
+  "releaseUrl": "https://github.com/zambooty/lumina-adhd-calendar/releases/tag/android-debug-2026-11-26-1.1.5",
+  "sha256": "379859ac73f1a7db0028866cdd38fe8a26c1c8fce153a3f2ea00458f34ba7895",
+  "publishedAt": "2026-11-26T20:12:00Z",
   "channel": "debug",
-  "notes": "Android debug 1.1.4 (versionCode 6) — Phase 4 floating pet + home widgets (WidgetSync) + ADHD UX polish."
+  "notes": "Android debug 1.1.5 (versionCode 7) — Three.js companion pet + security harden (Twilio/OAuth)."
 }
